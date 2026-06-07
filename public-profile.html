@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NextHire Public Profile</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      .public-shell {
+        max-width: 860px;
+        margin: 2rem auto;
+        padding: 0 1rem 2rem;
+      }
+      .public-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0.8rem;
+      }
+      .public-item {
+        background: #111a28;
+        border: 1px solid #27384d;
+        border-radius: 10px;
+        padding: 0.7rem 0.8rem;
+      }
+      .public-item strong {
+        display: block;
+        color: #41f1cc;
+        margin-bottom: 0.25rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="public-shell">
+      <section class="card">
+        <h2 id="public-name">Public Profile</h2>
+        <p id="public-status" class="status muted">Loading profile...</p>
+        <div id="public-metrics" class="public-grid"></div>
+      </section>
+    </main>
+    <script>
+      const statusEl = document.getElementById("public-status");
+      const nameEl = document.getElementById("public-name");
+      const metricsEl = document.getElementById("public-metrics");
+      const API_BASE = "http://localhost:4000";
+      const slug = new URLSearchParams(window.location.search).get("u") || "";
+
+      function row(label, value) {
+        return `<article class="public-item"><strong>${label}</strong><span>${value}</span></article>`;
+      }
+
+      async function loadPublicProfile() {
+        if (!slug) {
+          statusEl.className = "status err";
+          statusEl.textContent = "Invalid public profile link.";
+          return;
+        }
+        try {
+          const res = await fetch(`${API_BASE}/api/profile/public/${encodeURIComponent(slug)}`);
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Profile unavailable.");
+          nameEl.textContent = `${data.name || "User"} - Public Profile`;
+          statusEl.className = "status ok";
+          statusEl.textContent = "Live public profile loaded.";
+          const m = data.metrics || {};
+          metricsEl.innerHTML = [
+            row("Job Readiness", `${Number(m.jobReadiness || 0)}%`),
+            row("Profile Strength", `${Number(m.profileStrength || 0)}%`),
+            row("Hire Probability", `${Number(m.hireProbability || 0)}%`),
+            row("LeetCode Solved", Number(m.leetcodeSolved || 0)),
+            row("CodeChef Solved", Number(m.codechefSolved || 0)),
+            row("GitHub Repos", Number(m.githubRepos || 0)),
+          ].join("");
+        } catch (err) {
+          statusEl.className = "status err";
+          statusEl.textContent = err.message || "Public profile unavailable.";
+        }
+      }
+      loadPublicProfile();
+    </script>
+  </body>
+</html>

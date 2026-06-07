@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NextHire — Coding Profile Analyzer</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="brand">
+        <div class="logo">NH</div>
+        <div class="brand-text">
+          <h1>NextHire</h1>
+          <p>Coding Profile Analyzer & Job Match Optimizer</p>
+        </div>
+      </div>
+      <nav class="nav">
+        <a href="#" id="rankings-nav">Ranking</a>
+        <a href="#inputs">Profile</a>
+        <a href="#dashboard">Dashboard</a>
+        <a href="#skill-gap">Skill Gap</a>
+        <a href="#projects">Projects</a>
+        <button id="logout-btn" class="ghost">Logout</button>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-content">
+          <div class="welcome-row">
+            <label class="avatar-uploader" for="profile-avatar-input" title="Upload profile photo">
+              <img id="profile-avatar-img" alt="Profile avatar" />
+              <span id="profile-avatar-fallback">N</span>
+            </label>
+            <input id="profile-avatar-input" type="file" accept="image/*" hidden />
+            <div>
+              <p id="welcome-line" class="muted">
+                Welcome, <span id="welcome-name">there</span>.
+              </p>
+              <p class="muted small">Tap avatar to upload profile picture</p>
+            </div>
+          </div>
+          <span class="chip live">Live Insight Engine</span>
+          <h2>Turn your coding history into a placement advantage.</h2>
+          <p class="muted">
+            NextHire merges your profiles, detects weak spots, and generates a
+            targeted roadmap to boost rankings and job readiness.
+          </p>
+          <div class="hero-actions">
+            <a class="primary" href="#inputs">Start Analysis</a>
+            <a class="ghost" href="#dashboard">View Dashboard</a>
+          </div>
+        </div>
+        <div class="hero-panel">
+          <div class="pulse-card">
+            <h3>Today’s Focus</h3>
+            <p>2 medium problems</p>
+            <p>1 contest practice</p>
+            <p>Update 1 repo README</p>
+          </div>
+          <div class="pulse-card accent">
+            <h3>Momentum</h3>
+            <p><strong>+18%</strong> weekly consistency</p>
+            <p>Target star: <strong>3⭐</strong></p>
+            <p>Deployment: <strong>Pending</strong></p>
+          </div>
+        </div>
+      </section>
+
+      <section id="inputs" class="card">
+        <div class="analyzer-shell">
+          <div class="analyzer-main">
+            <h2>Analyzer</h2>
+            <p class="muted">
+              Enter your coding platform usernames to generate a smart profile analysis.
+            </p>
+            <form id="profile-form" class="grid">
+          <label>
+            LeetCode Username
+            <input type="text" id="leetcode" placeholder="e.g. johndoe" />
+          </label>
+          <label>
+            CodeChef Username
+            <input type="text" id="codechef" placeholder="e.g. johndoe" />
+          </label>
+          <label>
+            CodeChef Solved (manual)
+            <input
+              type="number"
+              id="codechef-solved"
+              min="0"
+              placeholder="e.g. 384"
+            />
+          </label>
+          <label>
+            GitHub Username
+            <input type="text" id="github" placeholder="e.g. johndoe" />
+          </label>
+          <label>
+            HackerRank Username
+            <input type="text" id="hackerrank" placeholder="e.g. johndoe" />
+          </label>
+          <label>
+            Target Role
+            <select id="role">
+              <option value="frontend">Frontend</option>
+              <option value="backend">Backend</option>
+              <option value="fullstack">Full Stack</option>
+            </select>
+          </label>
+          <label>
+            Target Job Skills (comma‑separated)
+            <input type="text" id="job-skills" placeholder="React, Node, MongoDB, DSA" />
+          </label>
+          <div class="actions">
+            <button type="submit" class="primary">Analyze Profile</button>
+            <button type="button" id="edit-profile" class="ghost">Edit Profile</button>
+          </div>
+          <div id="status" class="status muted">Waiting for input…</div>
+          <h3 class="resume-corner-title">Resume Corner</h3>
+          <div class="resume-actions">
+            <button type="button" id="make-resume-btn" class="ghost">Make a Resume</button>
+            <button type="button" id="add-resume-btn" class="ghost">Add Resume</button>
+            <button type="button" id="resume-readiness-btn" class="ghost">Resume Readiness %</button>
+          </div>
+          <input id="resume-file-input" type="file" accept=".txt,.md,.pdf,.docx" hidden />
+          <div id="resume-status" class="status muted">No resume generated yet.</div>
+          <div id="resume-output-actions" class="resume-output-actions hidden">
+            <button type="button" id="view-resume-btn" class="ghost">View Resume</button>
+            <button type="button" id="view-added-resume-btn" class="ghost">View Added Resume</button>
+            <button type="button" id="download-resume-btn" class="primary">Download Resume</button>
+          </div>
+          <div id="uploaded-resume-level" class="status muted hidden">Uploaded resume readiness: --</div>
+            </form>
+          </div>
+          <aside class="analyzer-side">
+            <h3>Achievements</h3>
+            <p class="muted">Badges and certificates across your platforms.</p>
+            <div id="achievement-list" class="achievement-list">
+              <div class="achievement-item">
+                <span class="achievement-platform">Profile</span>
+                <span class="achievement-text">Run analyzer to load achievements.</span>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="dashboard" class="card">
+        <h2>Dashboard Overview</h2>
+        <div class="mini-kpis">
+          <div class="kpi">
+            <span class="label">Profile Strength</span>
+            <span class="value" id="kpi-strength">72%</span>
+          </div>
+          <div class="kpi">
+            <span class="label">Weekly Goal</span>
+            <span class="value" id="kpi-goal">6/10</span>
+          </div>
+          <div class="kpi">
+            <span class="label">Skill Readiness</span>
+            <span class="value" id="kpi-ready">68%</span>
+          </div>
+        </div>
+        <div class="summary-grid">
+          <div class="summary">
+            <h3>LeetCode</h3>
+            <p><span id="lc-total">0</span> solved</p>
+            <p>Easy: <span id="lc-easy">0</span></p>
+            <p>Medium: <span id="lc-medium">0</span></p>
+            <p>Hard: <span id="lc-hard">0</span></p>
+            <p>Contest Rating: <span id="lc-rating">0</span></p>
+            <p>Contests Participated: <span id="lc-contests">0</span></p>
+            <p>Rank: <span id="lc-rank">-</span></p>
+          </div>
+          <div class="summary">
+            <h3>CodeChef</h3>
+            <p>Stars: <span id="cc-stars">0</span></p>
+            <p>Global Rank: <span id="cc-rank">-</span></p>
+            <p>Problems Solved: <span id="cc-solved">0</span></p>
+            <p>Contests Participated: <span id="cc-contests">0</span></p>
+            <p class="target">Target: <span id="cc-target">-</span></p>
+          </div>
+          <div class="summary">
+            <h3>GitHub</h3>
+            <p>Public Repos: <span id="gh-repos">0</span></p>
+            <p>Stars: <span id="gh-stars">0</span></p>
+            <p>Top Languages: <span id="gh-langs">-</span></p>
+            <p>Readme Quality: <span id="gh-readme">-</span></p>
+          </div>
+          <div class="summary">
+            <h3>HackerRank</h3>
+            <p>Badges: <span id="hr-badges">0</span></p>
+            <p>Certifications: <span id="hr-certs">0</span></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="career-intel">
+        <h2>Career Intelligence Engine</h2>
+        <p class="muted">
+          Role fit, skill gaps, and a 30-day plan based on your actual profile signals.
+        </p>
+        <div id="career-output" class="career-output"></div>
+      </section>
+
+      <section class="card">
+        <h2>Rank Improvement Roadmap</h2>
+        <div id="roadmap" class="roadmap"></div>
+      </section>
+
+      <section class="card">
+        <h2>Weekly Study Plan</h2>
+        <div id="study-plan" class="study-plan"></div>
+      </section>
+
+      <section class="card">
+        <h2>Weekly Execution Tracker</h2>
+        <p class="muted">Track daily tasks. Completing them increases your weekly goal score.</p>
+        <div id="weekly-tracker" class="weekly-tracker"></div>
+        <div class="actions">
+          <button type="button" id="weekly-complete" class="primary">Complete Week</button>
+        </div>
+        <div id="weekly-status" class="status muted">Finish all tasks to unlock next week.</div>
+      </section>
+
+      <section id="projects" class="card">
+        <h2>Project Recommendations</h2>
+        <div id="project-list" class="pill-grid"></div>
+        <div id="project-detail" class="project-detail hidden" role="dialog" aria-modal="true">
+          <div class="project-detail-card">
+            <div class="project-detail-header">
+              <h3 id="project-title">Project Details</h3>
+              <button type="button" id="project-close" class="ghost">Close</button>
+            </div>
+            <div class="project-detail-body">
+              <div>
+                <h4>Suggested Tech</h4>
+                <ul id="project-tech" class="career-list"></ul>
+              </div>
+              <div>
+                <h4>Core Features</h4>
+                <ul id="project-features" class="career-list"></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="skill-gap" class="card">
+        <h2>Skill Gap Analysis</h2>
+        <div id="skill-gap-grid" class="skill-gap-grid"></div>
+      </section>
+
+      <section class="card">
+        <h2>Progress Tracker</h2>
+        <div class="progress">
+          <div class="progress-item">
+            <span>DSA Coverage</span>
+            <div class="bar"><div id="prog-dsa" class="fill"></div></div>
+          </div>
+          <div class="progress-item">
+            <span>Contest Consistency</span>
+            <div class="bar"><div id="prog-contest" class="fill"></div></div>
+          </div>
+          <div class="progress-item">
+            <span>GitHub Quality</span>
+            <div class="bar"><div id="prog-gh" class="fill"></div></div>
+          </div>
+          <div class="progress-item">
+            <span>CodeChef Solved</span>
+            <div class="bar"><div id="prog-cc" class="fill"></div></div>
+          </div>
+          <div class="progress-item">
+            <span>HackerRank Badges</span>
+            <div class="bar"><div id="prog-hr" class="fill"></div></div>
+          </div>
+          <div class="progress-item">
+            <span>Skill Gap Coverage</span>
+            <div class="bar"><div id="prog-skillgap" class="fill"></div></div>
+          </div>
+          <div class="progress-item">
+            <span>Project Delivery</span>
+            <div class="bar"><div id="prog-projects" class="fill"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="today-contests">
+        <h2>Today's Contests</h2>
+        <p class="muted">Live contest list for today across coding platforms.</p>
+        <div id="contest-status" class="status muted">Loading contests...</div>
+        <div id="contest-list" class="contest-grid"></div>
+      </section>
+
+      <section class="card" id="world-hackathons">
+        <h2>Worldwide Hackathons</h2>
+        <p class="muted">Upcoming global hackathons with direct application links.</p>
+        <div id="hackathon-status" class="status muted">Loading hackathons...</div>
+        <div id="hackathon-list" class="contest-grid"></div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>NextHire — Smart prep guidance built from your coding profiles.</p>
+    </footer>
+
+    <div class="feedback-callout" aria-hidden="true">
+      <span class="feedback-callout-text">Click me</span>
+      <svg class="feedback-callout-arrow" viewBox="0 0 30 46" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="feedbackArrowHead" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto">
+            <path d="M0,0 L8,4 L0,8 z" fill="currentColor"></path>
+          </marker>
+        </defs>
+        <path
+          d="M15 4 L15 38"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          marker-end="url(#feedbackArrowHead)"
+        ></path>
+      </svg>
+    </div>
+    <div id="feedback-fab" class="feedback-fab" title="Feedback"></div>
+    <div id="feedback-panel" class="feedback-panel hidden">
+      <button type="button" id="feedback-btn" class="primary">Feedback</button>
+      <button type="button" id="chatbot-btn" class="ghost">Chatbot</button>
+      <button type="button" id="study-btn" class="ghost">How to Study?</button>
+      <button type="button" id="question-papers-btn" class="ghost">Question Papers</button>
+      <button type="button" id="mock-interview-btn" class="ghost">Mock Interview</button>
+    </div>
+    <div id="activity-modal" class="activity-modal hidden" role="dialog" aria-modal="true" aria-label="Activity Heatmap">
+      <div class="activity-card">
+        <div class="activity-head">
+          <h3>Activity Heatmap</h3>
+          <button type="button" id="activity-close" class="ghost">Close</button>
+        </div>
+        <p id="activity-session-text" class="muted small">Tracking your work from this login session.</p>
+        <div class="profile-visibility-actions">
+          <button type="button" id="visibility-toggle-btn" class="ghost">Public</button>
+          <button type="button" id="share-profile-btn" class="ghost">Share Profile</button>
+          <button type="button" id="theme-toggle-btn" class="ghost" aria-label="Toggle theme">☀</button>
+        </div>
+        <div id="activity-summary" class="activity-summary"></div>
+        <div id="activity-heatmap" class="activity-heatmap"></div>
+        <div class="activity-legend">
+          <span>Low</span>
+          <span class="activity-cell level-1"></span>
+          <span class="activity-cell level-2"></span>
+          <span class="activity-cell level-3"></span>
+          <span class="activity-cell level-4"></span>
+          <span>High</span>
+        </div>
+        <div class="activity-actions">
+          <button type="button" id="activity-feedback-btn" class="ghost">Feedback</button>
+          <button type="button" id="activity-chatbot-btn" class="ghost">NexMind</button>
+          <button type="button" id="activity-study-btn" class="ghost">How to Study?</button>
+          <button type="button" id="activity-question-papers-btn" class="ghost">Question Papers</button>
+          <button type="button" id="activity-mock-interview-btn" class="ghost">Mock Interview</button>
+        </div>
+        <div id="activity-log" class="activity-log"></div>
+      </div>
+    </div>
+
+    <div id="rankings-modal" class="activity-modal hidden" role="dialog" aria-modal="true" aria-label="User Rankings">
+      <div class="activity-card rankings-card">
+        <div class="activity-head">
+          <h3>Global User Rankings</h3>
+          <button type="button" id="rankings-close" class="ghost">Close</button>
+        </div>
+        <p class="muted small">Real-time ranking based on profile analysis, job readiness, skills, programs, projects, and contests.</p>
+        <div class="rankings-toolbar">
+          <input id="rankings-search" type="text" placeholder="Search by name..." />
+          <button type="button" id="rankings-refresh" class="ghost">Refresh</button>
+        </div>
+        <div id="rankings-status" class="status muted">Loading rankings...</div>
+        <div class="rankings-table-wrap">
+          <table class="rankings-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Name</th>
+                <th>Visibility</th>
+                <th>Job Readiness</th>
+                <th>Rank Score</th>
+                <th>Programs</th>
+                <th>Projects</th>
+                <th>Contests</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="rankings-body"></tbody>
+          </table>
+        </div>
+        <div id="ranking-view-panel" class="ranking-view-panel hidden">
+          <div class="ranking-view-head">
+            <h4 id="ranking-view-title">Public Profile</h4>
+            <button type="button" id="ranking-view-close" class="ghost">Close</button>
+          </div>
+          <div id="ranking-view-content" class="ranking-view-content"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="public-card-modal" class="activity-modal hidden" role="dialog" aria-modal="true" aria-label="Public Profile Card">
+      <div class="activity-card public-card-shell">
+        <div class="activity-head">
+          <h3>Public Profile</h3>
+          <button type="button" id="public-card-close" class="ghost">Close</button>
+        </div>
+        <div id="public-card-content" class="public-card-content"></div>
+      </div>
+    </div>
+
+    <aside id="chatbot-drawer" class="chatbot-drawer hidden" aria-label="NexMind Chatbot">
+      <div class="chatbot-header">
+        <h3>NexMind</h3>
+        <button type="button" id="chatbot-close" class="ghost">Close</button>
+      </div>
+      <div class="chatbot-suggestions">
+        <span class="chatbot-suggestions-title">Try asking:</span>
+        <div class="chatbot-suggestion-list">
+          <button type="button" class="chatbot-suggestion">What contests are happening today?</button>
+          <button type="button" class="chatbot-suggestion">How is my hire probability and why?</button>
+          <button type="button" class="chatbot-suggestion">Give me a 7-day plan for my role</button>
+          <button type="button" class="chatbot-suggestion">What are my top skill gaps?</button>
+          <button type="button" class="chatbot-suggestion">Suggest 3 projects for me</button>
+          <button type="button" class="chatbot-suggestion">How is my resume readiness?</button>
+        </div>
+      </div>
+      <div id="chatbot-messages" class="chatbot-messages"></div>
+      <form id="chatbot-form" class="chatbot-form">
+        <input id="chatbot-input" type="text" placeholder="Ask about skills, role fit, projects..." />
+        <button type="submit" class="primary">Send</button>
+      </form>
+    </aside>
+
+    <div id="study-modal" class="activity-modal hidden" role="dialog" aria-modal="true" aria-label="How to Study">
+      <div class="activity-card">
+        <div class="activity-head">
+          <h3>How to Study</h3>
+          <button type="button" id="study-close" class="ghost">Close</button>
+        </div>
+        <p id="study-subtitle" class="muted small">Recommended courses and YouTube playlists.</p>
+        <div id="study-list" class="study-course-grid"></div>
+      </div>
+    </div>
+
+    <div id="papers-modal" class="activity-modal hidden" role="dialog" aria-modal="true" aria-label="Interview Question Papers">
+      <div class="activity-card">
+        <div class="activity-head">
+          <h3>Question Papers</h3>
+          <button type="button" id="papers-close" class="ghost">Close</button>
+        </div>
+        <p class="muted small">Company-wise interview question collections with direct links.</p>
+        <div id="papers-list" class="study-course-grid"></div>
+      </div>
+    </div>
+
+    <div id="mock-modal" class="activity-modal hidden" role="dialog" aria-modal="true" aria-label="Mock Interview">
+      <div class="activity-card">
+        <div class="activity-head">
+          <h3>Mock Interview</h3>
+          <button type="button" id="mock-close" class="ghost">Close</button>
+        </div>
+        <p class="muted small">Practice technical and HR rounds. Submit answers to get instant score.</p>
+        <div class="mock-controls">
+          <label>Round Type
+            <select id="mock-type">
+              <option value="technical">Technical</option>
+              <option value="hr">HR</option>
+            </select>
+          </label>
+          <label>Paper
+            <select id="mock-paper"></select>
+          </label>
+          <button type="button" id="mock-start-btn" class="primary">Start Mock</button>
+          <button type="button" id="mock-submit-btn" class="ghost">Submit Answers</button>
+        </div>
+        <div id="mock-status" class="status muted">Choose round type and click Start Mock.</div>
+        <div id="mock-questions" class="mock-questions"></div>
+      </div>
+    </div>
+
+    <div id="resume-modal" class="resume-modal hidden" role="dialog" aria-modal="true">
+      <div class="resume-modal-card">
+        <div class="resume-modal-head">
+          <h3>Build Resume</h3>
+          <button type="button" id="resume-modal-close" class="ghost">Close</button>
+        </div>
+        <form id="resume-form" class="resume-form-grid">
+          <label>Full Name<input id="resume-name" type="text" required /></label>
+          <label>Email<input id="resume-email" type="email" required /></label>
+          <label>Phone<input id="resume-phone" type="text" required /></label>
+          <label>Location<input id="resume-location" type="text" placeholder="City, Country" /></label>
+          <label>LinkedIn<input id="resume-linkedin" type="text" placeholder="linkedin.com/in/..." /></label>
+          <label>Portfolio<input id="resume-portfolio" type="text" placeholder="https://..." /></label>
+          <label>College/University<input id="resume-college" type="text" required /></label>
+          <label>Degree<input id="resume-degree" type="text" required /></label>
+          <label>CGPA<input id="resume-cgpa" type="text" placeholder="e.g. 8.4" /></label>
+          <label>Graduation Year<input id="resume-grad-year" type="text" placeholder="e.g. 2027" /></label>
+          <label>Experience (months)<input id="resume-exp-months" type="number" min="0" value="0" /></label>
+          <label>Skills (comma-separated)<input id="resume-skills" type="text" placeholder="React, Node, SQL" /></label>
+          <label class="full">Professional Summary<textarea id="resume-summary" rows="3"></textarea></label>
+          <label class="full">Projects (one per line)<textarea id="resume-projects" rows="4" placeholder="Project name - impact"></textarea></label>
+          <label class="full">Achievements/Badges<textarea id="resume-achievements" rows="3"></textarea></label>
+          <label class="full">Certificates<textarea id="resume-certs" rows="3"></textarea></label>
+          <div class="actions full">
+            <button type="submit" class="primary">Generate Resume</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="resume-view-modal" class="resume-modal hidden" role="dialog" aria-modal="true">
+      <div class="resume-view-card">
+        <div class="resume-modal-head">
+          <h3>Resume Preview</h3>
+          <button type="button" id="resume-view-close" class="ghost">Close</button>
+        </div>
+        <div id="resume-view-content" class="resume-view-content"></div>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.7.2/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
+
+
+

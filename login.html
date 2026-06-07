@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NextHire — Login</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="auth-page">
+    <main class="auth-shell">
+      <section class="auth-hero">
+        <div class="logo">NH</div>
+        <h1>Welcome back</h1>
+        <p class="muted">
+          Log in to access your full NextHire dashboard and history.
+        </p>
+      </section>
+      <section class="card auth-card">
+        <h2>Log In</h2>
+        <form id="login-form" class="auth-form">
+          <label>
+            Email
+            <input type="email" id="login-email" placeholder="you@email.com" required />
+          </label>
+          <label>
+            Password
+            <input type="password" id="login-password" placeholder="••••••••" required />
+          </label>
+          <button type="submit" class="primary">Log In</button>
+        </form>
+        <div id="auth-status" class="status muted">Not logged in.</div>
+        <p class="muted small">
+          Don’t have an account?
+          <a href="signup.html">Create one</a>
+        </p>
+      </section>
+    </main>
+    <script src="auth.js"></script>
+  </body>
+</html>

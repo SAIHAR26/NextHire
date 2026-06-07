@@ -1,0 +1,12 @@
+.env
+.env.example
+node_modules/
+.env.*
+coverage/
+dist/
+build/
+*.log
+data/job_descriptions.csv
+data/data job posts.csv
+data/survey_results_public.csv
+*.zip

@@ -1,0 +1,264 @@
+const API_BASE = "http://localhost:4000";
+const TOKEN_KEY = "nexthire_token";
+const NAME_KEY = "nexthire_name";
+
+const authStatusEl = document.getElementById("auth-status");
+const loginForm = document.getElementById("login-form");
+const signupForm = document.getElementById("signup-form");
+
+const signupNameInput = document.getElementById("signup-name");
+const signupRoleInput = document.getElementById("signup-role");
+const signupEmailInput = document.getElementById("signup-email");
+const signupPasswordInput = document.getElementById("signup-password");
+const signupOtpInput = document.getElementById("signup-otp");
+const requestOtpBtn = document.getElementById("request-otp-btn");
+const verifyOtpBtn = document.getElementById("verify-otp-btn");
+const verifyBadge = document.getElementById("verify-badge");
+
+const REQUEST_TIMEOUT_MS = 12000;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
+
+let signupVerifyToken = "";
+let verifiedEmail = "";
+
+function setAuthStatus(type, message) {
+  if (!authStatusEl) return;
+  authStatusEl.className = `status ${type || ""}`.trim();
+  authStatusEl.textContent = message;
+}
+
+function setToken(token) {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
+}
+
+function setName(name) {
+  if (name) localStorage.setItem(NAME_KEY, name);
+  else localStorage.removeItem(NAME_KEY);
+}
+
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function guessNameFromEmail(email) {
+  if (!email) return "";
+  const local = email.split("@")[0] || "";
+  return local
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function redirectHome() {
+  window.location.href = "index.html";
+}
+
+function renderVerifyBadge(ok, message = "") {
+  if (!verifyBadge) return;
+  verifyBadge.classList.toggle("verified", Boolean(ok));
+  verifyBadge.textContent = message || (ok ? "Verified" : "Not verified");
+}
+
+function resetVerificationState() {
+  signupVerifyToken = "";
+  verifiedEmail = "";
+  renderVerifyBadge(false, "Not verified");
+}
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function pingBackend() {
+  try {
+    const res = await fetchWithTimeout(`${API_BASE}/api/health`);
+    if (!res.ok) throw new Error("Backend not healthy.");
+    setAuthStatus("ok", "Backend connected. You can continue.");
+  } catch {
+    setAuthStatus("err", "Backend not reachable. Start server on http://localhost:4000.");
+  }
+}
+
+pingBackend();
+
+if (loginForm) {
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    setAuthStatus("warn", "Logging in...");
+    try {
+      const payload = {
+        email: normalizeEmail(document.getElementById("login-email")?.value || ""),
+        password: document.getElementById("login-password")?.value || "",
+      };
+      const res = await fetchWithTimeout(`${API_BASE}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const msg = await res.json().catch(() => ({}));
+        throw new Error(msg.error || "Login failed.");
+      }
+      const data = await res.json();
+      setToken(data.token);
+      const name = (data.name || "").trim() || guessNameFromEmail(payload.email) || "";
+      setName(name);
+      setAuthStatus("ok", "Logged in. Redirecting...");
+      setTimeout(redirectHome, 400);
+    } catch (err) {
+      const message =
+        err.name === "AbortError"
+          ? "Login timed out. Check backend and try again."
+          : err.message === "Failed to fetch"
+            ? "Cannot reach backend. Start server on http://localhost:4000."
+            : err.message;
+      setAuthStatus("err", message);
+    }
+  });
+}
+
+if (signupForm) {
+  resetVerificationState();
+
+  signupEmailInput?.addEventListener("input", () => {
+    const email = normalizeEmail(signupEmailInput.value);
+    if (!email || email !== verifiedEmail) {
+      resetVerificationState();
+    }
+  });
+
+  requestOtpBtn?.addEventListener("click", async () => {
+    const email = normalizeEmail(signupEmailInput?.value || "");
+    const name = String(signupNameInput?.value || "").trim();
+    if (!EMAIL_REGEX.test(email)) {
+      setAuthStatus("err", "Enter a valid email before requesting code.");
+      return;
+    }
+    requestOtpBtn.disabled = true;
+    setAuthStatus("warn", "Sending verification code...");
+    try {
+      const res = await fetchWithTimeout(`${API_BASE}/api/auth/verification/request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, name }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not send verification code.");
+      if (data?.devMode) {
+        const devCode = String(data.devCode || "").trim();
+        setAuthStatus(
+          "warn",
+          devCode
+            ? `Dev email mode active. Use verification code ${devCode}.`
+            : "Dev email mode active. Configure SMTP to receive real emails."
+        );
+      } else {
+        setAuthStatus("ok", "Verification code sent. Check your email inbox/spam.");
+      }
+      renderVerifyBadge(false, "Code sent");
+      signupOtpInput?.focus();
+    } catch (err) {
+      const message =
+        err.name === "AbortError"
+          ? "Verification request timed out. Try again."
+          : err.message === "Failed to fetch"
+            ? "Cannot reach backend. Start server on http://localhost:4000."
+            : err.message;
+      setAuthStatus("err", message);
+    } finally {
+      requestOtpBtn.disabled = false;
+    }
+  });
+
+  verifyOtpBtn?.addEventListener("click", async () => {
+    const email = normalizeEmail(signupEmailInput?.value || "");
+    const code = String(signupOtpInput?.value || "").trim();
+    if (!EMAIL_REGEX.test(email)) {
+      setAuthStatus("err", "Enter a valid email first.");
+      return;
+    }
+    if (!/^\d{6}$/.test(code)) {
+      setAuthStatus("err", "Enter the 6-digit verification code.");
+      return;
+    }
+    verifyOtpBtn.disabled = true;
+    setAuthStatus("warn", "Verifying email...");
+    try {
+      const res = await fetchWithTimeout(`${API_BASE}/api/auth/verification/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Email verification failed.");
+      signupVerifyToken = String(data.verifyToken || "");
+      verifiedEmail = email;
+      renderVerifyBadge(true, "Verified");
+      setAuthStatus("ok", "Email verified. You can create account now.");
+    } catch (err) {
+      resetVerificationState();
+      const message =
+        err.name === "AbortError"
+          ? "Verification timed out. Try again."
+          : err.message === "Failed to fetch"
+            ? "Cannot reach backend. Start server on http://localhost:4000."
+            : err.message;
+      setAuthStatus("err", message);
+    } finally {
+      verifyOtpBtn.disabled = false;
+    }
+  });
+
+  signupForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const email = normalizeEmail(signupEmailInput?.value || "");
+    if (!EMAIL_REGEX.test(email)) {
+      setAuthStatus("err", "Enter a valid email.");
+      return;
+    }
+    if (!signupVerifyToken || email !== verifiedEmail) {
+      setAuthStatus("err", "Verify your email before creating account.");
+      return;
+    }
+    setAuthStatus("warn", "Creating account...");
+    try {
+      const payload = {
+        name: signupNameInput?.value.trim() || "",
+        role: String(signupRoleInput?.value || "candidate").toLowerCase(),
+        email,
+        password: signupPasswordInput?.value || "",
+        verifyToken: signupVerifyToken,
+      };
+      const res = await fetchWithTimeout(`${API_BASE}/api/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const msg = await res.json().catch(() => ({}));
+        throw new Error(msg.error || "Signup failed.");
+      }
+      setAuthStatus("ok", "Account created. Redirecting to login...");
+      resetVerificationState();
+      setTimeout(() => {
+        window.location.href = "login.html";
+      }, 600);
+    } catch (err) {
+      const message =
+        err.name === "AbortError"
+          ? "Signup timed out. Check backend and try again."
+          : err.message === "Failed to fetch"
+            ? "Cannot reach backend. Start server on http://localhost:4000."
+            : err.message;
+      setAuthStatus("err", message);
+    }
+  });
+}

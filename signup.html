@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NextHire — Sign Up</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="auth-page">
+    <main class="auth-shell">
+      <section class="auth-hero">
+        <div class="logo">NH</div>
+        <h1>Create your account</h1>
+        <p class="muted">
+          Save your analysis history and get personalized roadmaps.
+        </p>
+      </section>
+      <section class="card auth-card">
+        <h2>Sign Up</h2>
+        <form id="signup-form" class="auth-form">
+          <label>
+            Name
+            <input type="text" id="signup-name" placeholder="Your name" required />
+          </label>
+          <label>
+            Role
+            <select id="signup-role" required>
+              <option value="candidate" selected>Candidate</option>
+              <option value="recruiter">Recruiter</option>
+            </select>
+          </label>
+          <label>
+            Email
+            <input type="email" id="signup-email" placeholder="you@email.com" required />
+          </label>
+          <div class="verify-row">
+            <button type="button" id="request-otp-btn" class="ghost">Send Verification Code</button>
+          </div>
+          <label>
+            Verification Code
+            <input type="text" id="signup-otp" placeholder="6-digit OTP" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" />
+          </label>
+          <div class="verify-row">
+            <button type="button" id="verify-otp-btn" class="ghost">Verify Email</button>
+            <span id="verify-badge" class="verify-badge">Not verified</span>
+          </div>
+          <label>
+            Password
+            <input type="password" id="signup-password" placeholder="••••••••" required />
+          </label>
+          <button type="submit" class="primary">Create Account</button>
+        </form>
+        <div id="auth-status" class="status muted">Create your account to continue.</div>
+        <p class="muted small">
+          Already have an account?
+          <a href="login.html">Log in</a>
+        </p>
+      </section>
+    </main>
+    <script src="auth.js"></script>
+  </body>
+</html>
