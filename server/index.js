@@ -13,6 +13,14 @@ import { scoreResumeReadiness } from "./ml/resumeModel.js";
 
 dotenv.config({ path: new URL(".env", import.meta.url) });
 
+// Some local shells set HTTP(S)_PROXY to 127.0.0.1:9 to intentionally block
+// network access. The profile analyzer needs direct public API access, so do
+// not let axios route LeetCode/GitHub/CodeChef requests through that dead proxy.
+["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"].forEach(
+  (key) => delete process.env[key]
+);
+axios.defaults.proxy = false;
+
 // Warm up ML models at startup to avoid first-request timeouts.
 try {
   retrainRoleModel();
@@ -386,27 +394,28 @@ async function fetchGitHub(username) {
     return { userRes, reposRes };
   };
 
+  const githubErrorMessage = (err) => {
+    const status = err?.response?.status;
+    if (status === 404) return "GitHub user not found";
+    if (status === 403 || status === 429) return "GitHub rate limit reached. Try again later";
+    if (err?.code === "ECONNABORTED") return "GitHub request timed out";
+    return "GitHub live data unavailable";
+  };
+
   let reposRes;
   try {
     ({ reposRes } = await request(withToken));
   } catch (err) {
-    const status = err?.response?.status;
-    // Fallback when token is invalid/rate-limited/forbidden.
-    if (status === 401 || status === 403) {
+    // If a configured token is invalid, expired, rate-limited, or blocked, retry
+    // the same public endpoints without it before falling back to empty metrics.
+    if (GITHUB_TOKEN) {
       try {
         ({ reposRes } = await request(withoutToken));
       } catch (fallbackErr) {
-        const fbStatus = fallbackErr?.response?.status;
-        if (fbStatus === 404) throw new Error("GitHub user not found");
-        if (fbStatus === 403) throw new Error("GitHub API rate limit exceeded");
-        throw new Error("GitHub API request failed");
+        throw new Error(githubErrorMessage(fallbackErr));
       }
-    } else if (status === 404) {
-      throw new Error("GitHub user not found");
-    } else if (status === 429) {
-      throw new Error("GitHub API rate limit exceeded");
     } else {
-      throw new Error("GitHub API request failed");
+      throw new Error(githubErrorMessage(err));
     }
   }
 
@@ -446,6 +455,16 @@ async function fetchLeetCode(username) {
       contestsParticipated: 0,
     };
   }
+  const empty = (warning = "") => ({
+    total: 0,
+    easy: 0,
+    medium: 0,
+    hard: 0,
+    rating: 0,
+    rank: "-",
+    contestsParticipated: 0,
+    ...(warning ? { warning } : {}),
+  });
   const query = `
     query userProfile($username: String!) {
       matchedUser(username: $username) {
@@ -472,14 +491,22 @@ async function fetchLeetCode(username) {
       }
     }
   `;
-  const res = await axios.post(
-    "https://leetcode.com/graphql",
-    {
-      query,
-      variables: { username },
-    },
-    { timeout: PLATFORM_TIMEOUT_MS }
-  );
+  let res;
+  try {
+    res = await axios.post(
+      "https://leetcode.com/graphql",
+      {
+        query,
+        variables: { username },
+      },
+      { timeout: PLATFORM_TIMEOUT_MS }
+    );
+  } catch {
+    return empty("LeetCode live data unavailable");
+  }
+  if (!res.data?.data?.matchedUser) {
+    return empty("LeetCode user not found or profile is unavailable");
+  }
   const stats = res.data?.data?.matchedUser?.submitStatsGlobal?.acSubmissionNum;
   const ranking = res.data?.data?.matchedUser?.profile?.ranking ?? "-";
   const rating = res.data?.data?.userContestRanking?.rating ?? 0;
@@ -713,7 +740,7 @@ async function fetchCodeChef(username) {
       rank: "-",
       solved: 0,
       contestsParticipated: 0,
-      warning: "CodeChef unavailable",
+      warning: "CodeChef live data unavailable",
     };
   }
 }
