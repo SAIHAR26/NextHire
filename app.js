@@ -749,34 +749,171 @@ function computeStudyPlan(data) {
 function computeSkillGap(inputs, data) {
   const safeInputs = inputs || {};
   const safeData = data || {};
-  const jobSkills = Array.isArray(safeInputs.jobSkills) ? safeInputs.jobSkills : [];
-  const ghLangs = Array.isArray(safeData?.github?.languages)
-    ? safeData.github.languages.map((l) => String(l).toLowerCase())
-    : [];
-  const solvedIntensity =
-    (safeData?.leetcode?.total || 0) +
-    (safeData?.codechef?.solved || 0) +
-    (safeData?.hackerrank?.badges || 0);
+  const role = String(safeInputs.role || "fullstack").toLowerCase();
+  const normalize = (value) => String(value || "").trim().toLowerCase().replace(/[.]/g, "").replace(/\s+/g, " ");
+  const displayName = (value) => String(value || "").trim().replace(/\bapi\b/i, "API").replace(/\bui\b/i, "UI");
 
-  return jobSkills.map((skill) => {
-    const lower = skill.toLowerCase();
-    const inGithub = ghLangs.some((lang) => lang.includes(lower));
-    const inDsa = ["dsa", "data structures", "algorithms"].some((s) =>
-      lower.includes(s)
-    );
-    const hasDSA = inDsa ? solvedIntensity > 400 : false;
-    const present = inGithub || hasDSA;
+  const roleDefaults = {
+    frontend: ["JavaScript", "React", "HTML", "CSS", "API Integration", "Git", "Testing", "Deployment"],
+    backend: ["Node.js", "Express", "REST API", "MongoDB", "SQL", "Authentication", "Testing", "Deployment"],
+    fullstack: ["JavaScript", "React", "Node.js", "REST API", "MongoDB", "SQL", "Git", "Testing", "Deployment"],
+  };
+  const roleActions = {
+    frontend: {
+      React: "Build one React dashboard component with state, API loading, and error states.",
+      JavaScript: "Add one JavaScript feature using async fetch, validation, and DOM/state updates.",
+      HTML: "Improve semantic structure and accessibility labels in one page.",
+      CSS: "Create one responsive layout and document screenshots in README.",
+      "API Integration": "Connect a frontend view to one real API with loading and retry handling.",
+    },
+    backend: {
+      "Node.js": "Build one Node.js endpoint with validation and error handling.",
+      Express: "Create an Express CRUD route set and document request/response examples.",
+      "REST API": "Publish a REST API collection with auth, pagination, and validation.",
+      MongoDB: "Add one MongoDB schema/query feature and explain indexes in README.",
+      SQL: "Practice joins, grouping, and one schema design problem.",
+      Authentication: "Implement JWT login/logout with protected routes and bcrypt hashing.",
+    },
+    fullstack: {
+      React: "Build a small React UI connected to a backend endpoint.",
+      "Node.js": "Ship a Node API and consume it from the frontend.",
+      MongoDB: "Persist one full workflow in MongoDB and show sample records.",
+    },
+  };
+
+  const userTargets = Array.isArray(safeInputs.jobSkills) ? safeInputs.jobSkills : [];
+  const mlTargets = Array.isArray(safeData?.ml?.targetSkills) ? safeData.ml.targetSkills : [];
+  const targetSkills = [...userTargets, ...mlTargets, ...(roleDefaults[role] || roleDefaults.fullstack)]
+    .map(displayName)
+    .filter(Boolean)
+    .filter((skill, idx, arr) => arr.findIndex((s) => normalize(s) === normalize(skill)) === idx)
+    .slice(0, 12);
+
+  const githubLangs = Array.isArray(safeData?.github?.languages) ? safeData.github.languages : [];
+  const githubRepos = Number(safeData?.github?.repos) || 0;
+  const githubStars = Number(safeData?.github?.stars) || 0;
+  const readmeQuality = String(safeData?.github?.readmeQuality || "").toLowerCase();
+  const leetTotal = Number(safeData?.leetcode?.total) || 0;
+  const leetMedium = Number(safeData?.leetcode?.medium) || 0;
+  const leetHard = Number(safeData?.leetcode?.hard) || 0;
+  const leetRating = Number(safeData?.leetcode?.rating) || 0;
+  const codechefSolved = Number(safeData?.codechef?.solved) || 0;
+  const contests = (Number(safeData?.leetcode?.contestsParticipated) || 0) + (Number(safeData?.codechef?.contestsParticipated) || 0);
+  const resumeData = loadResumeData?.() || {};
+  const resumeSkills = Array.isArray(resumeData.skills) ? resumeData.skills : [];
+  const resumeText = [
+    ...resumeSkills,
+    resumeData.summary || "",
+    ...(Array.isArray(resumeData.projects) ? resumeData.projects : []),
+    resumeData.uploadedResumeText || "",
+  ].join(" ").toLowerCase();
+  const profileText = [
+    ...githubLangs,
+    readmeQuality,
+    ...(Array.isArray(safeData?.ml?.strengths) ? safeData.ml.strengths : []),
+    ...(Array.isArray(safeData?.achievements) ? safeData.achievements.map((a) => `${a.title || ""} ${a.detail || ""}`) : []),
+  ].join(" ").toLowerCase();
+
+  const aliases = {
+    javascript: ["javascript", "js", "node", "react"],
+    typescript: ["typescript", "ts"],
+    react: ["react", "jsx", "frontend"],
+    html: ["html"],
+    css: ["css", "tailwind", "bootstrap"],
+    "nodejs": ["node", "nodejs", "node.js"],
+    express: ["express"],
+    "rest api": ["rest", "api", "endpoint", "http"],
+    "api integration": ["api", "fetch", "axios", "integration"],
+    mongodb: ["mongodb", "mongo", "mongoose"],
+    sql: ["sql", "mysql", "postgres", "postgresql", "database"],
+    authentication: ["auth", "authentication", "jwt", "login", "bcrypt", "session"],
+    testing: ["test", "testing", "jest", "unit", "playwright"],
+    git: ["git", "github"],
+    deployment: ["deploy", "deployment", "vercel", "netlify", "render", "aws"],
+    dsa: ["dsa", "algorithm", "data structure", "leetcode", "codechef"],
+  };
+  const termsFor = (skill) => aliases[normalize(skill)] || [normalize(skill), normalize(skill).replace(/\s+/g, "")];
+  const hasAny = (text, terms) => terms.some((term) => text.includes(term));
+  const isDsa = (skill) => hasAny(termsFor(skill), ["dsa", "algorithm", "data structure", "leetcode", "codechef"]);
+
+  return targetSkills.map((skill) => {
+    const key = normalize(skill);
+    const terms = termsFor(skill);
+    const evidence = [];
+    const missingProof = [];
+    let score = 0;
+
+    if (hasAny(profileText, terms)) {
+      score += 35;
+      evidence.push("shown in GitHub/profile data");
+    } else {
+      missingProof.push("not visible in GitHub/profile data");
+    }
+
+    if (hasAny(resumeText, terms)) {
+      score += 25;
+      evidence.push("mentioned in resume");
+    } else {
+      missingProof.push("not mentioned in resume");
+    }
+
+    if (["javascript", "react", "nodejs", "express", "rest api", "mongodb", "sql", "api integration"].includes(key)) {
+      const repoScore = Math.min(20, githubRepos * 3 + Math.min(5, githubStars));
+      score += repoScore;
+      if (githubRepos >= 3) evidence.push(`${githubRepos} GitHub repos`);
+      else missingProof.push("needs project proof");
+    }
+
+    if (key === "git" && githubRepos > 0) {
+      score += 35;
+      evidence.push("active GitHub profile");
+    }
+    if (key === "deployment" && (readmeQuality === "good" || githubRepos >= 5)) {
+      score += 15;
+      evidence.push("portfolio is documented; add deployment links if missing");
+    }
+    if (key === "testing" && hasAny(resumeText + " " + profileText, ["test", "testing", "jest", "playwright"])) {
+      score += 30;
+      evidence.push("testing is explicitly mentioned");
+    }
+    if (key === "authentication" && hasAny(resumeText + " " + profileText, ["auth", "jwt", "login", "bcrypt"])) {
+      score += 35;
+      evidence.push("auth/JWT evidence found");
+    }
+    if (isDsa(skill)) {
+      const dsaVolume = leetTotal + codechefSolved;
+      const dsaScore = Math.min(55, Math.round((dsaVolume / 900) * 35 + (leetMedium / 200) * 10 + (leetHard / 80) * 5 + (contests / 30) * 5));
+      score += dsaScore;
+      if (dsaVolume >= 400) evidence.push(`${dsaVolume} solved problems`);
+      if (leetRating >= 1400) evidence.push(`contest rating ${leetRating}`);
+    }
+
+    score = clampScore(score);
+    const priority = score >= 75 ? "Covered" : score >= 45 ? "Improve" : "High Priority";
+    const present = score >= 75;
+    const action =
+      roleActions[role]?.[skill] ||
+      roleActions.fullstack?.[skill] ||
+      (isDsa(skill)
+        ? "Solve 15 medium problems from this topic and add contest consistency."
+        : `Add one project or resume bullet that proves ${skill}.`);
+    const reason = present
+      ? `Strong evidence: ${evidence.join(", ") || "profile signals match this skill"}.`
+      : score >= 45
+        ? `Partial evidence: ${evidence.join(", ") || "some signals found"}. Next: ${action}`
+        : `Gap: ${missingProof.slice(0, 2).join(", ") || "not enough proof"}. Next: ${action}`;
 
     return {
       skill,
       present,
-      reason: present
-        ? "Covered in your profile signals."
-        : "Not evident in GitHub or coding history.",
+      score,
+      priority,
+      reason,
+      evidence: evidence.join(", "),
+      action,
     };
-  });
+  }).sort((a, b) => a.score - b.score);
 }
-
 function computeProgress(data, inputs) {
   const dsa = Math.min(100, Math.round((data.leetcode.total / 600) * 100));
   const contest = Math.min(100, Math.round((data.leetcode.rating / 2000) * 100));
@@ -793,7 +930,7 @@ function computeProgress(data, inputs) {
       : Math.min(
           100,
           Math.round(
-            (skills.filter((item) => item.present).length / skills.length) * 100
+            skills.reduce((sum, item) => sum + (Number(item.score) || 0), 0) / skills.length
           )
         );
   const projects = Math.min(100, Math.round((data.github.repos / 5) * 100));
@@ -1489,13 +1626,21 @@ function renderSkillGap(skillItems) {
     title.textContent = item.skill;
     const badge = document.createElement("span");
     badge.className = `badge ${item.present ? "ok" : "missing"}`;
-    badge.textContent = item.present ? "Covered" : "Learn";
+    badge.textContent = item.priority || (item.present ? "Covered" : "High priority");
+    const score = document.createElement("p");
+    score.className = "muted";
+    score.textContent = `Evidence score: ${Number(item.score || 0)}%`;
     const reason = document.createElement("p");
     reason.className = "muted";
     reason.textContent = item.reason;
+    const action = document.createElement("p");
+    action.className = "muted";
+    action.textContent = item.action ? `Action: ${item.action}` : "";
     card.appendChild(title);
     card.appendChild(badge);
+    card.appendChild(score);
     card.appendChild(reason);
+    if (item.action) card.appendChild(action);
     container.appendChild(card);
   });
 }
@@ -2959,7 +3104,7 @@ form.addEventListener("submit", async (event) => {
   }
   state.inputs = readProfileFromForm();
 
-  setStatus("warn", "Refreshing ML weak-plan model and fetching live data...");
+  setStatus("warn", "Refreshing ML week-plan model and fetching live data...");
   await ensureCareerModelTraining(false);
 
   try {
@@ -3654,7 +3799,17 @@ if (resumeReadinessBtn) {
   resumeReadinessBtn.addEventListener("click", async () => {
     const resumeData = loadResumeData();
     if (!resumeData) {
-      setResumeStatus("Create resume first using Make a Resume.", "warn");
+      setResumeStatus("Create a resume or upload one using Add Resume first.", "warn");
+      return;
+    }
+    const hasGeneratedResume = Boolean(
+      String(resumeData.summary || "").trim() ||
+        (Array.isArray(resumeData.skills) && resumeData.skills.length) ||
+        (Array.isArray(resumeData.projects) && resumeData.projects.length)
+    );
+    const hasUploadedResume = Boolean(String(resumeData.uploadedResumeText || "").trim());
+    if (!hasGeneratedResume && !hasUploadedResume) {
+      setResumeStatus("Create a resume or upload one using Add Resume first.", "warn");
       return;
     }
     setResumeStatus("Calculating readiness using ML model...", "warn");

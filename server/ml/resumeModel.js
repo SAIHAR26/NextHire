@@ -15,6 +15,106 @@ function normalizeText(value) {
   return String(value || "").trim();
 }
 
+function extractSection(text, headings) {
+  const source = normalizeText(text);
+  if (!source) return "";
+  const escaped = headings.map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const headingPattern = escaped.join("|");
+  const allHeadings = [
+    "summary",
+    "profile",
+    "objective",
+    "skills",
+    "technical skills",
+    "projects",
+    "experience",
+    "education",
+    "achievements",
+    "certifications",
+    "certificates",
+  ];
+  const otherPattern = allHeadings
+    .filter((h) => !headings.map((x) => x.toLowerCase()).includes(h))
+    .map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  const regex = new RegExp(`(?:^|\\n)\\s*(?:${headingPattern})\\s*:?\\s*\\n?([\\s\\S]*?)(?=\\n\\s*(?:${otherPattern})\\s*:?\\s*\\n|$)`, "i");
+  const match = source.match(regex);
+  return normalizeText(match?.[1] || "");
+}
+
+function splitResumeLines(value) {
+  return String(value || "")
+    .split(/\r?\n|•|\u2022|\s+-\s+/)
+    .map((v) => v.replace(/^[-*]\s*/, "").trim())
+    .filter((v) => v.length > 2);
+}
+
+function parseUploadedResumeText(text = {}) {
+  const raw = normalizeText(text);
+  if (!raw) return {};
+  const compact = raw.replace(/\s+/g, " ").trim();
+  const summarySection = extractSection(raw, ["summary", "profile", "objective"]);
+  const skillsSection = extractSection(raw, ["skills", "technical skills"]);
+  const projectsSection = extractSection(raw, ["projects", "experience"]);
+  const educationSection = extractSection(raw, ["education"]);
+  const achievementsSection = extractSection(raw, ["achievements"]);
+  const certsSection = extractSection(raw, ["certifications", "certificates"]);
+
+  const summary = summarySection || compact.slice(0, 360);
+  const knownTech = [
+    "javascript",
+    "typescript",
+    "react",
+    "node",
+    "express",
+    "mongodb",
+    "sql",
+    "python",
+    "java",
+    "c++",
+    "html",
+    "css",
+    "rest api",
+    "git",
+    "docker",
+    "aws",
+  ];
+  const skills = normalizeArray(skillsSection || compact.match(/skills?[:\-]\s*([^\n]+)/i)?.[1] || "");
+  const inferredSkills = knownTech.filter((skill) => compact.toLowerCase().includes(skill));
+  const finalSkills = [...new Set([...skills, ...inferredSkills])];
+  const projectLines = splitResumeLines(projectsSection)
+    .filter((line) => line.length >= 12)
+    .slice(0, 8);
+  const inferredProjectLines = splitResumeLines(raw)
+    .filter((line) => /(built|developed|implemented|created|optimized|deployed|project|api|dashboard|module)/i.test(line))
+    .filter((line) => line.length >= 20)
+    .slice(0, 6);
+  const finalProjects = projectLines.length ? projectLines : inferredProjectLines;
+  const achievements = splitResumeLines(achievementsSection || raw)
+    .filter((line) => /(solved|contest|rank|certified|certificate|achievement|won|completed|\d+\+)/i.test(line))
+    .slice(0, 6);
+  const certifications = splitResumeLines(certsSection).slice(0, 6);
+
+  const email = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] || "";
+  const phone = raw.match(/(?:\+?\d[\d\s().-]{7,}\d)/)?.[0] || "";
+  const cgpa = raw.match(/(?:cgpa|gpa)\s*[:\-]?\s*([0-9.]+)/i)?.[1] || "";
+  const gradYear = raw.match(/\b(20\d{2})\b/)?.[1] || "";
+
+  return {
+    summary,
+    skills: finalSkills,
+    projects: finalProjects,
+    achievements,
+    certifications,
+    email,
+    phone,
+    cgpa,
+    gradYear,
+    college: educationSection.split(/\r?\n/).find(Boolean) || "Resume education",
+    degree: educationSection.match(/\b(B\.?Tech|Bachelor|Master|M\.?Tech|BSc|MSc|BE|ME|Degree)\b[^\n]*/i)?.[0] || "Degree",
+  };
+}
+
 function tokenize(text) {
   return String(text || "")
     .toLowerCase()
@@ -157,23 +257,43 @@ export function scoreResumeReadiness({
   targetRole = "frontend",
   targetSkills = [],
 }) {
+  const uploadedData = parseUploadedResumeText(resumeData.uploadedResumeText || "");
+  const mergedResumeData = {
+    ...uploadedData,
+    ...resumeData,
+    summary: resumeData.summary || uploadedData.summary || "",
+    skills: normalizeArray(resumeData.skills).length ? resumeData.skills : uploadedData.skills || [],
+    projects: normalizeArray(resumeData.projects).length ? resumeData.projects : uploadedData.projects || [],
+    achievements: normalizeArray(resumeData.achievements).length
+      ? resumeData.achievements
+      : uploadedData.achievements || [],
+    certifications: normalizeArray(resumeData.certifications).length
+      ? resumeData.certifications
+      : uploadedData.certifications || [],
+    email: resumeData.email || uploadedData.email || "",
+    phone: resumeData.phone || uploadedData.phone || "",
+    college: resumeData.college || uploadedData.college || "",
+    degree: resumeData.degree || uploadedData.degree || "",
+    cgpa: resumeData.cgpa || uploadedData.cgpa || "",
+    gradYear: resumeData.gradYear || uploadedData.gradYear || "",
+  };
   const suggestions = [];
   const missingSections = [];
 
-  const summaryRes = scoreSummary(resumeData.summary);
+  const summaryRes = scoreSummary(mergedResumeData.summary);
   if (summaryRes.tip) {
     suggestions.push(summaryRes.tip);
     missingSections.push("summary_quality");
   }
 
-  const projectRes = scoreProjectLines(resumeData.projects);
+  const projectRes = scoreProjectLines(mergedResumeData.projects);
   if (projectRes.tip) {
     suggestions.push(projectRes.tip);
     missingSections.push("project_impact");
   }
 
   const relevanceRes = scoreSkillsRelevance(
-    resumeData.skills,
+    mergedResumeData.skills,
     targetSkills,
     targetRole,
     profileSignals
@@ -184,12 +304,12 @@ export function scoreResumeReadiness({
   }
 
   const impactEvidence = scoreAchievements(
-    resumeData.achievements,
-    resumeData.certifications,
+    mergedResumeData.achievements,
+    mergedResumeData.certifications,
     profileSignals
   );
 
-  const structure = scoreStructure(resumeData);
+  const structure = scoreStructure(mergedResumeData);
   if (structure < 60) missingSections.push("core_structure");
 
   // Weighted content-centric score
