@@ -12,6 +12,15 @@ const MAX_JOBPOST_ROWS = 5000;
 const MAX_JOBDESC_ROWS = 8000;
 const MAX_JOBREC_ROWS = 8000;
 
+const DATASET_WEIGHTS = {
+  gpt: 0.6,
+  job: 1.6,
+  jobPost: 1.5,
+  jobDesc: 1.4,
+  jobRec: 1.3,
+  survey: 0,
+};
+
 let cachedModel = null;
 
 function readFile(fileName, maxBytes = null) {
@@ -103,6 +112,25 @@ function labelFromText(text) {
   return null;
 }
 
+function addTrainingExample({ classCounts, tokenCounts, totalTokens, skillBuckets, label, text, skills = [], weight = 1 }) {
+  if (!label || !ROLE_LABELS.includes(label) || !weight) return;
+  classCounts.set(label, classCounts.get(label) + weight);
+
+  const tokens = tokenize(text);
+  tokens.forEach((token) => {
+    const bucket = tokenCounts.get(label);
+    bucket.set(token, (bucket.get(token) || 0) + weight);
+    totalTokens.set(label, totalTokens.get(label) + weight);
+  });
+
+  skills
+    .filter(Boolean)
+    .forEach((skill) => {
+      const map = skillBuckets.get(label);
+      map.set(skill, (map.get(skill) || 0) + weight);
+    });
+}
+
 function buildModel() {
   const classCounts = new Map();
   const tokenCounts = new Map();
@@ -127,13 +155,14 @@ function buildModel() {
     const resume = row[resumeIdx] || "";
     const label = labelFromText(category);
     if (!label) return;
-    classCounts.set(label, classCounts.get(label) + 1);
+    const weight = DATASET_WEIGHTS.gpt;
+    classCounts.set(label, classCounts.get(label) + weight);
     const tokens = tokenize(resume);
     tokens.forEach((token) => {
       vocab.add(token);
       const bucket = tokenCounts.get(label);
-      bucket.set(token, (bucket.get(token) || 0) + 1);
-      totalTokens.set(label, totalTokens.get(label) + 1);
+      bucket.set(token, (bucket.get(token) || 0) + weight);
+      totalTokens.set(label, totalTokens.get(label) + weight);
     });
   });
 
@@ -151,13 +180,14 @@ function buildModel() {
     const resp = row[respIdx] || "";
     const label = labelFromText(`${title} ${keywords}`);
     if (!label) return;
-    classCounts.set(label, classCounts.get(label) + 1);
+    const weight = DATASET_WEIGHTS.job;
+    classCounts.set(label, classCounts.get(label) + weight);
     const tokens = tokenize(`${title} ${skills} ${keywords} ${resp}`);
     tokens.forEach((token) => {
       vocab.add(token);
       const bucket = tokenCounts.get(label);
-      bucket.set(token, (bucket.get(token) || 0) + 1);
-      totalTokens.set(label, totalTokens.get(label) + 1);
+      bucket.set(token, (bucket.get(token) || 0) + weight);
+      totalTokens.set(label, totalTokens.get(label) + weight);
     });
 
     skills
@@ -166,7 +196,7 @@ function buildModel() {
       .filter(Boolean)
       .forEach((skill) => {
         const map = skillBuckets.get(label);
-        map.set(skill, (map.get(skill) || 0) + 1);
+        map.set(skill, (map.get(skill) || 0) + weight);
       });
   });
 
@@ -194,13 +224,14 @@ function buildModel() {
       const qual = row[qualIdx] || "";
       const label = labelFromText(`${title} ${desc} ${req}`);
       if (!label) return;
-      classCounts.set(label, classCounts.get(label) + 1);
+      const weight = DATASET_WEIGHTS.jobPost;
+      classCounts.set(label, classCounts.get(label) + weight);
       const tokens = tokenize(`${title} ${desc} ${req} ${qual}`);
       tokens.forEach((token) => {
         vocab.add(token);
         const bucket = tokenCounts.get(label);
-        bucket.set(token, (bucket.get(token) || 0) + 1);
-        totalTokens.set(label, totalTokens.get(label) + 1);
+        bucket.set(token, (bucket.get(token) || 0) + weight);
+        totalTokens.set(label, totalTokens.get(label) + weight);
       });
       const skills = `${req} ${qual}`
         .split(/[,;|]/)
@@ -208,7 +239,7 @@ function buildModel() {
         .filter(Boolean);
       skills.forEach((skill) => {
         const map = skillBuckets.get(label);
-        map.set(skill, (map.get(skill) || 0) + 1);
+          map.set(skill, (map.get(skill) || 0) + weight);
       });
     });
   }
@@ -236,13 +267,14 @@ function buildModel() {
       const resp = row[respIdx] || "";
       const label = labelFromText(`${title} ${role}`);
       if (!label) return;
-      classCounts.set(label, classCounts.get(label) + 1);
+      const weight = DATASET_WEIGHTS.jobDesc;
+      classCounts.set(label, classCounts.get(label) + weight);
       const tokens = tokenize(`${title} ${role} ${desc} ${skills} ${resp}`);
       tokens.forEach((token) => {
         vocab.add(token);
         const bucket = tokenCounts.get(label);
-        bucket.set(token, (bucket.get(token) || 0) + 1);
-        totalTokens.set(label, totalTokens.get(label) + 1);
+        bucket.set(token, (bucket.get(token) || 0) + weight);
+        totalTokens.set(label, totalTokens.get(label) + weight);
       });
       const skillList = skills
         .split(/[,;|]/)
@@ -250,7 +282,7 @@ function buildModel() {
         .filter(Boolean);
       skillList.forEach((skill) => {
         const map = skillBuckets.get(label);
-        map.set(skill, (map.get(skill) || 0) + 1);
+          map.set(skill, (map.get(skill) || 0) + weight);
       });
     });
   }
@@ -272,13 +304,14 @@ function buildModel() {
       const skills = row[skillsIdx] || "";
       const label = labelFromText(title);
       if (!label) return;
-      classCounts.set(label, classCounts.get(label) + 1);
+      const weight = DATASET_WEIGHTS.jobRec;
+      classCounts.set(label, classCounts.get(label) + weight);
       const tokens = tokenize(`${title} ${skills}`);
       tokens.forEach((token) => {
         vocab.add(token);
         const bucket = tokenCounts.get(label);
-        bucket.set(token, (bucket.get(token) || 0) + 1);
-        totalTokens.set(label, totalTokens.get(label) + 1);
+        bucket.set(token, (bucket.get(token) || 0) + weight);
+        totalTokens.set(label, totalTokens.get(label) + weight);
       });
       skills
         .split(/[,;|]/)
@@ -286,7 +319,7 @@ function buildModel() {
         .filter(Boolean)
         .forEach((skill) => {
           const map = skillBuckets.get(label);
-          map.set(skill, (map.get(skill) || 0) + 1);
+          map.set(skill, (map.get(skill) || 0) + weight);
         });
     });
   }
@@ -319,18 +352,19 @@ function buildModel() {
     const langs = (row[langIdx] || "").split(";").map((s) => s.trim());
     const webs = (row[webIdx] || "").split(";").map((s) => s.trim());
     const tokens = tokenize(`${langs.join(" ")} ${webs.join(" ")}`);
+    const weight = DATASET_WEIGHTS.survey;
     roles.forEach((label) => {
-      classCounts.set(label, classCounts.get(label) + 1);
+      classCounts.set(label, classCounts.get(label) + weight);
       tokens.forEach((token) => {
         vocab.add(token);
         const bucket = tokenCounts.get(label);
-        bucket.set(token, (bucket.get(token) || 0) + 1);
-        totalTokens.set(label, totalTokens.get(label) + 1);
+        bucket.set(token, (bucket.get(token) || 0) + weight);
+        totalTokens.set(label, totalTokens.get(label) + weight);
       });
       const skills = [...langs, ...webs].filter(Boolean);
       skills.forEach((skill) => {
         const map = skillBuckets.get(label);
-        map.set(skill, (map.get(skill) || 0) + 1);
+        map.set(skill, (map.get(skill) || 0) + weight);
       });
     });
   });
