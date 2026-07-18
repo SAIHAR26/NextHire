@@ -10,6 +10,7 @@ import { predictRoles, getRoleSkills, retrainRoleModel } from "./ml/roleModel.js
 import { estimateHireProbability, retrainHireModel } from "./ml/hireModel.js";
 import { recommendProjects, retrainProjectModel } from "./ml/projectModel.js";
 import { scoreResumeReadiness } from "./ml/resumeModel.js";
+import { buildWeeklyPlan, retrainWeeklyPlanModel } from "./ml/weeklyPlanModel.js";
 
 dotenv.config({ path: new URL(".env", import.meta.url) });
 
@@ -26,6 +27,7 @@ try {
   retrainRoleModel();
   retrainHireModel();
   retrainProjectModel();
+  retrainWeeklyPlanModel();
   getRoleSkills("Frontend");
 } catch {
   // ignore warmup errors; model will lazily rebuild on demand
@@ -932,6 +934,7 @@ app.post("/api/ml/train-career-engine", authMiddleware, (req, res) => {
     const roleStats = retrainRoleModel();
     const hireStats = retrainHireModel();
     const projectStats = retrainProjectModel();
+    const weeklyPlanStats = retrainWeeklyPlanModel();
     return res.json({
       ok: true,
       trainedAt: new Date().toISOString(),
@@ -939,6 +942,7 @@ app.post("/api/ml/train-career-engine", authMiddleware, (req, res) => {
         roleModel: roleStats,
         hireModel: hireStats,
         projectModel: projectStats,
+        weeklyPlanModel: weeklyPlanStats,
       },
     });
   } catch (err) {
@@ -2278,6 +2282,15 @@ app.post("/api/analyze", authMiddleware, async (req, res) => {
       github,
       hackerrank,
     });
+    const weeklyPlan = buildWeeklyPlan({
+      role: topRole,
+      targetSkills: missingSkills.slice(0, 5),
+      missingSkills,
+      leetcode,
+      codechef,
+      github,
+      hackerrank,
+    });
 
     payload.ml = {
       ranked,
@@ -2289,29 +2302,22 @@ app.post("/api/analyze", authMiddleware, async (req, res) => {
       readiness: readinessScore,
       hireProbability,
       profileStrength,
-      targetSkills: missingSkills.slice(0, 3),
-      plan: {
-        week1: "Close 1 core gap and solve 10 DSA mediums.",
-        week2: "Ship one portfolio feature and document it.",
-        week3: "Add tests or deploy one project.",
-        week4: "Mock interviews + refine weakest skill.",
-      },
+      targetSkills: weeklyPlan.targetSkills,
+      plan: weeklyPlan.plan,
+      weeklyPlan,
+      weeklyTraining: retrainWeeklyPlanModel(),
       projects: recommendProjects({
         role: topRole,
         jobSkills: Array.isArray(jobSkills) ? jobSkills : [],
         missingSkills,
       }),
       roadmap: [
-        "Focus DSA: Arrays, Hashing, Sliding Window, Binary Search.",
-        "Weekly contests: 1 LeetCode + 1 CodeChef Starter.",
-        "Add 1 deployable project with documentation.",
-        "Refactor one repo with tests and CI.",
+        `Focus DSA on ${weeklyPlan.focus[0] || "arrays and hashing"}.`,
+        `Build a project around ${weeklyPlan.focus[1] || "role-specific fundamentals"}.`,
+        "Strengthen resume proof with README, deployment, and impact bullets.",
+        "Practice interview readiness and upsolve contest mistakes weekly.",
       ],
-      studyPlan: [
-        "DSA: 2 medium problems/day + review 1 topic.",
-        "System design basics: REST, auth, caching.",
-        "Build one feature end-to-end each week.",
-      ],
+      studyPlan: weeklyPlan.studyPlan,
     };
 
 
