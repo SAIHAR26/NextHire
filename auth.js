@@ -2,6 +2,7 @@ const API_BASE = "http://localhost:4000";
 const TOKEN_KEY = "nexthire_token";
 const NAME_KEY = "nexthire_name";
 const ROLE_KEY = "nexthire_role";
+const RECRUITER_DASHBOARD_PATH = "recruiter-dashboard.html";
 
 const authStatusEl = document.getElementById("auth-status");
 const loginForm = document.getElementById("login-form");
@@ -39,8 +40,13 @@ function setName(name) {
 }
 
 function setRole(role) {
-  if (role) localStorage.setItem(ROLE_KEY, role);
+  const safeRole = String(role || "").trim().toLowerCase();
+  if (safeRole) localStorage.setItem(ROLE_KEY, safeRole);
   else localStorage.removeItem(ROLE_KEY);
+}
+
+function getRole() {
+  return String(localStorage.getItem(ROLE_KEY) || "").trim().toLowerCase();
 }
 
 function normalizeEmail(email) {
@@ -60,6 +66,54 @@ function guessNameFromEmail(email) {
 function redirectHome() {
   const role = String(localStorage.getItem(ROLE_KEY) || "").toLowerCase();
   window.location.href = role === "admin" ? "admin.html" : "index.html";
+}
+
+function redirectRecruiterDashboard() {
+  window.location.href = RECRUITER_DASHBOARD_PATH;
+}
+
+function getLoginIntent() {
+  const params = new URLSearchParams(window.location.search || "");
+  return {
+    role: String(params.get("role") || "").trim().toLowerCase(),
+    redirect: String(params.get("redirect") || "").trim(),
+    email: normalizeEmail(params.get("email") || ""),
+  };
+}
+
+function getRecruiterLoginUrl(email = "") {
+  const params = new URLSearchParams({
+    role: "recruiter",
+    redirect: RECRUITER_DASHBOARD_PATH,
+  });
+  if (email) params.set("email", email);
+  return `login.html?${params.toString()}`;
+}
+
+function getRedirectForAuthRole(role, intent = {}) {
+  const safeRole = String(role || "").trim().toLowerCase();
+  const safeRedirect = String(intent.redirect || "").trim();
+  if (safeRole === "recruiter" && safeRedirect === RECRUITER_DASHBOARD_PATH) {
+    return redirectRecruiterDashboard;
+  }
+  return safeRole === "recruiter"
+    ? redirectRecruiterDashboard
+    : redirectHome;
+}
+
+function applyLoginIntent() {
+  const intent = getLoginIntent();
+  const emailInput = document.getElementById("login-email");
+  if (emailInput && intent.email) {
+    emailInput.value = intent.email;
+  }
+  if (loginForm && getRole() === "recruiter" && localStorage.getItem(TOKEN_KEY)) {
+    redirectRecruiterDashboard();
+  }
+  if (signupForm && getRole() === "recruiter" && localStorage.getItem(TOKEN_KEY)) {
+    redirectRecruiterDashboard();
+  }
+  return intent;
 }
 
 function renderVerifyBadge(ok, message = "") {
@@ -94,6 +148,7 @@ async function pingBackend() {
   }
 }
 
+const loginIntent = applyLoginIntent();
 pingBackend();
 
 if (loginForm) {
@@ -118,9 +173,9 @@ if (loginForm) {
       setToken(data.token);
       const name = (data.name || "").trim() || guessNameFromEmail(payload.email) || "";
       setName(name);
-      setRole(String(data.role || "candidate").toLowerCase());
+      setRole(data.role || "candidate");
       setAuthStatus("ok", "Logged in. Redirecting...");
-      setTimeout(redirectHome, 400);
+      setTimeout(getRedirectForAuthRole(data.role, loginIntent), 400);
     } catch (err) {
       const message =
         err.name === "AbortError"
@@ -253,6 +308,34 @@ if (signupForm) {
       if (!res.ok) {
         const msg = await res.json().catch(() => ({}));
         throw new Error(msg.error || "Signup failed.");
+      }
+      if (payload.role === "recruiter") {
+        setAuthStatus("warn", "Account created. Opening recruiter dashboard...");
+        try {
+          const loginRes = await fetchWithTimeout(`${API_BASE}/api/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: payload.email, password: payload.password }),
+          });
+          if (!loginRes.ok) throw new Error("Recruiter auto-login unavailable.");
+          const data = await loginRes.json();
+          if (String(data.role || "").toLowerCase() !== "recruiter") {
+            throw new Error("Recruiter account was not returned by login.");
+          }
+          setToken(data.token);
+          setName((data.name || "").trim() || payload.name || guessNameFromEmail(payload.email));
+          setRole("recruiter");
+          resetVerificationState();
+          setTimeout(redirectRecruiterDashboard, 400);
+          return;
+        } catch {
+          resetVerificationState();
+          setAuthStatus("ok", "Account created. Redirecting to recruiter login...");
+          setTimeout(() => {
+            window.location.href = getRecruiterLoginUrl(payload.email);
+          }, 600);
+          return;
+        }
       }
       setAuthStatus("ok", "Account created. Redirecting to login...");
       resetVerificationState();

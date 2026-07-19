@@ -917,6 +917,51 @@ button {
   padding: 2rem 1rem 3rem;
 }
 
+.recruiter-layout {
+  grid-template-columns: 240px minmax(0, 1fr);
+  align-items: start;
+}
+
+.recruiter-sidebar {
+  position: sticky;
+  top: 104px;
+  display: grid;
+  gap: 0.55rem;
+  background: var(--panel);
+  border: 1px solid #1f2a38;
+  border-radius: 16px;
+  padding: 1rem;
+  box-shadow: var(--shadow);
+}
+
+.recruiter-sidebar a,
+.recruiter-sidebar button {
+  width: 100%;
+  border-radius: 10px;
+  padding: 0.65rem 0.85rem;
+  color: var(--muted);
+  text-align: left;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.recruiter-sidebar a:hover,
+.recruiter-sidebar a.active {
+  color: var(--accent);
+  background: rgba(31, 209, 166, 0.12);
+}
+
+.recruiter-sidebar button {
+  margin-top: 0.3rem;
+  color: var(--text);
+}
+
+.recruiter-main {
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
 @media (max-width: 900px) {
   .site-header {
     flex-direction: column;
@@ -938,6 +983,20 @@ button {
 
   .analyzer-shell {
     grid-template-columns: 1fr;
+  }
+
+  .recruiter-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .recruiter-sidebar {
+    position: static;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+
+  .recruiter-sidebar button {
+    margin-top: 0;
+    text-align: center;
   }
 }
 .mini-kpis {
