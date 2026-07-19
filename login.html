@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>NextHire — Login</title>
+    <title>NextHire - Login</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body class="auth-page">
@@ -12,8 +12,12 @@
         <div class="logo">NH</div>
         <h1>Welcome back</h1>
         <p class="muted">
-          Log in to access your full NextHire dashboard and history.
+          Log in to access NextHire. Admin accounts use this same login and open the admin dashboard automatically.
         </p>
+        <div class="admin-auth-note">
+          <span class="pill">One login</span>
+          <span class="pill">Admin protected</span>
+        </div>
       </section>
       <section class="card auth-card">
         <h2>Log In</h2>
@@ -24,13 +28,13 @@
           </label>
           <label>
             Password
-            <input type="password" id="login-password" placeholder="••••••••" required />
+            <input type="password" id="login-password" placeholder="Password" required />
           </label>
           <button type="submit" class="primary">Log In</button>
         </form>
         <div id="auth-status" class="status muted">Not logged in.</div>
         <p class="muted small">
-          Don’t have an account?
+          Do not have an account?
           <a href="signup.html">Create one</a>
         </p>
       </section>

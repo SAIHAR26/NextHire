@@ -1,6 +1,7 @@
 const API_BASE = "http://localhost:4000";
 const TOKEN_KEY = "nexthire_token";
 const NAME_KEY = "nexthire_name";
+const ROLE_KEY = "nexthire_role";
 
 const authStatusEl = document.getElementById("auth-status");
 const loginForm = document.getElementById("login-form");
@@ -37,6 +38,11 @@ function setName(name) {
   else localStorage.removeItem(NAME_KEY);
 }
 
+function setRole(role) {
+  if (role) localStorage.setItem(ROLE_KEY, role);
+  else localStorage.removeItem(ROLE_KEY);
+}
+
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
@@ -52,7 +58,8 @@ function guessNameFromEmail(email) {
 }
 
 function redirectHome() {
-  window.location.href = "index.html";
+  const role = String(localStorage.getItem(ROLE_KEY) || "").toLowerCase();
+  window.location.href = role === "admin" ? "admin.html" : "index.html";
 }
 
 function renderVerifyBadge(ok, message = "") {
@@ -111,6 +118,7 @@ if (loginForm) {
       setToken(data.token);
       const name = (data.name || "").trim() || guessNameFromEmail(payload.email) || "";
       setName(name);
+      setRole(String(data.role || "candidate").toLowerCase());
       setAuthStatus("ok", "Logged in. Redirecting...");
       setTimeout(redirectHome, 400);
     } catch (err) {

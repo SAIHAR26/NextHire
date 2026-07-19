@@ -1,7 +1,10 @@
+import fs from "fs";
+import path from "path";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import axios from "axios";
+import { fileURLToPath } from "url";
 import { load as loadHtml } from "cheerio";
 import { MongoClient, ObjectId } from "mongodb";
 import bcrypt from "bcryptjs";
@@ -58,6 +61,10 @@ const EMAIL_VERIFY_JWT_SECRET = process.env.EMAIL_VERIFY_JWT_SECRET || JWT_SECRE
 const EMAIL_VERIFY_MAX_ATTEMPTS = 8;
 const EMAIL_VERIFICATION_DEV_FALLBACK =
   String(process.env.EMAIL_VERIFICATION_DEV_FALLBACK || "").trim() === "1";
+const ADMIN_EMAIL = normalizeEmail(process.env.ADMIN_EMAIL || "admin@nexthire.local");
+const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "NexHire@Admin123!");
+const ADMIN_NAME = String(process.env.ADMIN_NAME || "NextHire Admin").trim() || "NextHire Admin";
+const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 let dbClient;
 let dbFailedAt = 0;
@@ -226,6 +233,271 @@ function upsertMemoryProfile(userId, profileDoc) {
   }
   return memoryProfiles.find((p) => p.userId === userId) || null;
 }
+
+function getAppPages() {
+  try {
+    return fs
+      .readdirSync(APP_ROOT)
+      .filter((file) => file.toLowerCase().endsWith(".html"))
+      .sort();
+  } catch {
+    return ["index.html", "login.html", "signup.html", "public-profile.html"];
+  }
+}
+
+function safeMongoLink() {
+  const uri = String(process.env.MONGODB_URI || "").trim();
+  if (!uri) {
+    return { configured: false, display: "Not configured", href: "" };
+  }
+  try {
+    const parsed = new URL(uri);
+    parsed.username = "";
+    parsed.password = "";
+    return { configured: true, display: parsed.toString(), href: parsed.toString() };
+  } catch {
+    return { configured: true, display: "MongoDB URI configured", href: "" };
+  }
+}
+
+async function checkHttpService(name, url, options = {}) {
+  const startedAt = Date.now();
+  try {
+    const res = await axios.request({
+      url,
+      method: options.method || "GET",
+      data: options.data,
+      headers: options.headers || {},
+      timeout: Math.min(PLATFORM_TIMEOUT_MS, 6000),
+      validateStatus: (status) => status < 500,
+    });
+    const status = res.status < 400 ? "ok" : "warn";
+    return {
+      name,
+      status,
+      code: res.status,
+      responseMs: Date.now() - startedAt,
+      detail: status === "ok" ? "Reachable" : "Reachable, but blocking automated checks",
+    };
+  } catch (err) {
+    return {
+      name,
+      status: "down",
+      code: err?.response?.status || null,
+      responseMs: Date.now() - startedAt,
+      detail: err?.code === "ECONNABORTED" ? "Timed out" : "Unavailable",
+    };
+  }
+}
+
+function normalizeStoredUser(user = {}) {
+  const role = String(user?.role || "candidate").toLowerCase();
+  const verificationStatus = String(user?.verificationStatus || "").toLowerCase() || (role === "recruiter" ? "pending" : "verified");
+  return {
+    ...user,
+    role,
+    verificationStatus,
+  };
+}
+
+async function findUserById(db, userId) {
+  const safeId = String(userId || "").trim();
+  if (!safeId) return null;
+  if (db && ObjectId.isValid(safeId)) {
+    try {
+      const user = await db.collection("users").findOne({ _id: new ObjectId(safeId) });
+      if (user) return normalizeStoredUser(user);
+    } catch {
+      // ignore and fall back
+    }
+  }
+  return normalizeStoredUser(
+    memoryUsers.find((user) => String(user.id || user._id || "") === safeId) || null
+  );
+}
+
+async function findUserByEmail(db, email) {
+  const safeEmail = normalizeEmail(email);
+  if (!safeEmail) return null;
+  if (db) {
+    try {
+      const user = await db.collection("users").findOne({ email: safeEmail });
+      if (user) return normalizeStoredUser(user);
+    } catch {
+      // ignore and fall back
+    }
+  }
+  return normalizeStoredUser(memoryUsers.find((user) => normalizeEmail(user.email) === safeEmail) || null);
+}
+
+async function seedAdminAccount() {
+  const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 12);
+  const db = await getDb();
+  if (!db) {
+    const existing = memoryUsers.find((user) => normalizeEmail(user.email) === ADMIN_EMAIL);
+    if (existing) {
+      existing.role = "admin";
+      existing.verificationStatus = "verified";
+      existing.passwordHash = passwordHash;
+      existing.name = ADMIN_NAME;
+      return { ok: true, storage: "memory", created: false };
+    }
+    memoryUsers.push({
+      id: `admin_${Date.now()}`,
+      name: ADMIN_NAME,
+      role: "admin",
+      email: ADMIN_EMAIL,
+      passwordHash,
+      verificationStatus: "verified",
+      verifiedAt: new Date(),
+      createdAt: new Date(),
+    });
+    return { ok: true, storage: "memory", created: true };
+  }
+
+  try {
+    await db.collection("users").createIndex({ email: 1 }, { unique: true });
+  } catch {
+    // Existing duplicate emails should not block local development startup.
+  }
+
+  const existing = await db.collection("users").findOne({ email: ADMIN_EMAIL });
+  if (existing) {
+    await db.collection("users").updateOne(
+      { email: ADMIN_EMAIL },
+      {
+        $set: {
+          name: ADMIN_NAME,
+          role: "admin",
+          verificationStatus: "verified",
+          verifiedAt: existing.verifiedAt || new Date(),
+          passwordHash,
+          adminSeed: true,
+        },
+        $setOnInsert: { createdAt: new Date() },
+      }
+    );
+    return { ok: true, storage: "mongodb", created: false };
+  }
+
+  await db.collection("users").insertOne({
+    name: ADMIN_NAME,
+    role: "admin",
+    email: ADMIN_EMAIL,
+    passwordHash,
+    verificationStatus: "verified",
+    verifiedAt: new Date(),
+    createdAt: new Date(),
+    adminSeed: true,
+  });
+  return { ok: true, storage: "mongodb", created: true };
+}
+
+async function updateUserVerificationStatus(userId, verificationStatus, reviewedBy) {
+  const status = String(verificationStatus || "").toLowerCase();
+  const db = await getDb();
+  if (db && ObjectId.isValid(String(userId || ""))) {
+    const updates = {
+      verificationStatus: status,
+      reviewedBy: reviewedBy || null,
+      reviewedAt: new Date(),
+      updatedAt: new Date(),
+    };
+    if (status === "verified") updates.verifiedAt = new Date();
+    if (status === "rejected") updates.rejectedAt = new Date();
+    await db.collection("users").updateOne(
+      { _id: new ObjectId(String(userId)) },
+      { $set: updates }
+    );
+    return { ok: true, storage: "mongodb" };
+  }
+
+  const mem = memoryUsers.find((user) => String(user.id || user._id || "") === String(userId || ""));
+  if (!mem) return { ok: false };
+  mem.verificationStatus = status;
+  mem.reviewedBy = reviewedBy || null;
+  mem.reviewedAt = new Date();
+  if (status === "verified") mem.verifiedAt = new Date();
+  if (status === "rejected") mem.rejectedAt = new Date();
+  return { ok: true, storage: "memory" };
+}
+
+async function loadAdminOverview(db) {
+  const users = db
+    ? await db.collection("users").find({}).sort({ createdAt: -1 }).toArray()
+    : [...memoryUsers].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  const profiles = db
+    ? await db.collection("profiles").find({}).sort({ updatedAt: -1 }).toArray()
+    : [...memoryProfiles].sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+  const analyses = db
+    ? await db.collection("analyses").countDocuments()
+    : memoryAnalyses.length;
+
+  const normalizedUsers = users.map((user) => normalizeStoredUser(user));
+  const recruiterUsers = normalizedUsers.filter((user) => user.role === "recruiter");
+  const candidateUsers = normalizedUsers.filter((user) => user.role === "candidate");
+  const adminUsers = normalizedUsers.filter((user) => user.role === "admin");
+  const pendingRecruiters = recruiterUsers.filter((user) => user.verificationStatus !== "verified");
+  const verifiedRecruiters = recruiterUsers.filter((user) => user.verificationStatus === "verified");
+
+  const profileMap = new Map(
+    profiles.map((profile) => [String(profile.userId || ""), profile])
+  );
+
+  const recruiterQueue = pendingRecruiters.map((user) => ({
+    id: String(user._id || user.id || ""),
+    name: user.name || "Recruiter",
+    email: user.email || "",
+    status: user.verificationStatus || "pending",
+    createdAt: user.createdAt || null,
+    profile: profileMap.get(String(user._id || user.id || ""))?.profile || {},
+  }));
+
+  const recentUsers = normalizedUsers.slice(0, 12).map((user) => ({
+    id: String(user._id || user.id || ""),
+    name: user.name || "User",
+    email: user.email || "",
+    role: user.role || "candidate",
+    status: user.verificationStatus || (user.role === "recruiter" ? "pending" : "verified"),
+    createdAt: user.createdAt || null,
+  }));
+
+  const publicProfiles = db
+    ? await db.collection("profiles").countDocuments({ isPublic: true })
+    : memoryProfiles.filter((profile) => profile?.isPublic !== false).length;
+
+  const pages = getAppPages();
+  const jobFiles = ["job_dataset.csv", "job_recommendation_dataset.csv"].reduce((sum, fileName) => {
+    try {
+      const filePath = path.resolve(APP_ROOT, "data", fileName);
+      if (!fs.existsSync(filePath)) return sum;
+      const raw = fs.readFileSync(filePath, "utf8");
+      return sum + Math.max(0, raw.split(/\r?\n/).length - 2);
+    } catch {
+      return sum;
+    }
+  }, 0);
+
+  return {
+    counts: {
+      users: normalizedUsers.length,
+      candidates: candidateUsers.length,
+      recruiters: recruiterUsers.length,
+      adminUsers: adminUsers.length,
+      pendingRecruiters: pendingRecruiters.length,
+      verifiedRecruiters: verifiedRecruiters.length,
+      publicProfiles,
+      analyses,
+      pages: pages.length,
+      jobRecords: jobFiles,
+    },
+    recruiterQueue,
+    recentUsers,
+    pages,
+    users: normalizedUsers,
+  };
+}
+
 async function getDb() {
   const uri = process.env.MONGODB_URI;
   if (!uri) return null;
@@ -623,8 +895,8 @@ async function fetchCodeChef(username) {
       $(".rating-star").first().text().trim() ||
       $(".rating-number").first().text().trim();
     let stars = 0;
-    if (starsRaw.includes("★")) {
-      stars = starsRaw.split("★").length - 1;
+    if (starsRaw.includes("ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¹Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦")) {
+      stars = starsRaw.split("ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã¢â‚¬Â¹Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦").length - 1;
     } else {
       stars = parseInt(starsRaw, 10) || 0;
     }
@@ -1157,6 +1429,8 @@ app.post("/api/auth/signup", async (req, res) => {
       email,
       passwordHash,
       createdAt: new Date(),
+      verificationStatus: role === "recruiter" ? "pending" : "verified",
+      verifiedAt: role === "recruiter" ? null : new Date(),
     });
     deleteMemoryVerification(email);
     return res.json({ ok: true, storage: "memory" });
@@ -1171,6 +1445,8 @@ app.post("/api/auth/signup", async (req, res) => {
       email,
       passwordHash,
       createdAt: new Date(),
+      verificationStatus: role === "recruiter" ? "pending" : "verified",
+      verifiedAt: role === "recruiter" ? null : new Date(),
     });
     await db.collection("email_verifications").deleteOne({ email }).catch(() => null);
     deleteMemoryVerification(email);
@@ -1188,6 +1464,8 @@ app.post("/api/auth/signup", async (req, res) => {
       email,
       passwordHash,
       createdAt: new Date(),
+      verificationStatus: role === "recruiter" ? "pending" : "verified",
+      verifiedAt: role === "recruiter" ? null : new Date(),
     });
     deleteMemoryVerification(email);
     return res.json({ ok: true, storage: "memory" });
@@ -1206,20 +1484,28 @@ app.post("/api/auth/login", async (req, res) => {
     if (!user) return res.status(401).json({ error: "Invalid credentials." });
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: "Invalid credentials." });
-    const token = jwt.sign({ id: user.id, email }, JWT_SECRET, {
+    const normalizedUser = normalizeStoredUser(user);
+    if (normalizedUser.role === "recruiter" && normalizedUser.verificationStatus !== "verified") {
+      return res.status(403).json({ error: "Recruiter account pending admin verification." });
+    }
+    const token = jwt.sign({ id: user.id, email, role: normalizedUser.role }, JWT_SECRET, {
       expiresIn: "7d",
     });
-    return res.json({ token, name: user.name, role: user.role || "candidate", storage: "memory" });
+    return res.json({ token, name: user.name, role: normalizedUser.role || "candidate", verificationStatus: normalizedUser.verificationStatus, storage: "memory" });
   }
   try {
     const user = await db.collection("users").findOne({ email });
     if (!user) return res.status(401).json({ error: "Invalid credentials." });
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: "Invalid credentials." });
-    const token = jwt.sign({ id: user._id.toString(), email }, JWT_SECRET, {
+    const normalizedUser = normalizeStoredUser(user);
+    if (normalizedUser.role === "recruiter" && normalizedUser.verificationStatus !== "verified") {
+      return res.status(403).json({ error: "Recruiter account pending admin verification." });
+    }
+    const token = jwt.sign({ id: user._id.toString(), email, role: normalizedUser.role }, JWT_SECRET, {
       expiresIn: "7d",
     });
-    return res.json({ token, name: user.name, role: user.role || "candidate" });
+    return res.json({ token, name: user.name, role: normalizedUser.role || "candidate", verificationStatus: normalizedUser.verificationStatus });
   } catch {
     dbClient = null;
     dbFailedAt = Date.now();
@@ -1227,10 +1513,113 @@ app.post("/api/auth/login", async (req, res) => {
     if (!user) return res.status(401).json({ error: "Invalid credentials." });
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: "Invalid credentials." });
-    const token = jwt.sign({ id: user.id, email }, JWT_SECRET, {
+    const normalizedUser = normalizeStoredUser(user);
+    if (normalizedUser.role === "recruiter" && normalizedUser.verificationStatus !== "verified") {
+      return res.status(403).json({ error: "Recruiter account pending admin verification." });
+    }
+    const token = jwt.sign({ id: user.id, email, role: normalizedUser.role }, JWT_SECRET, {
       expiresIn: "7d",
     });
-    return res.json({ token, name: user.name, role: user.role || "candidate", storage: "memory" });
+    return res.json({ token, name: user.name, role: normalizedUser.role || "candidate", verificationStatus: normalizedUser.verificationStatus, storage: "memory" });
+  }
+});
+
+app.get("/api/auth/me", authMiddleware, async (req, res) => {
+  const db = await getDb();
+  const user = await findUserById(db, req.user?.id);
+  if (!user) return res.status(404).json({ error: "User not found." });
+  return res.json({
+    user: {
+      id: String(user._id || user.id || ""),
+      name: user.name || "",
+      email: user.email || "",
+      role: user.role || "candidate",
+      verificationStatus: user.verificationStatus || (user.role === "recruiter" ? "pending" : "verified"),
+      createdAt: user.createdAt || null,
+    },
+  });
+});
+
+async function requireAdmin(req, res, next) {
+  const db = await getDb();
+  const user = await findUserById(db, req.user?.id);
+  if (!user || String(user.role || "").toLowerCase() !== "admin") {
+    return res.status(403).json({ error: "Admin access required." });
+  }
+  req.adminUser = user;
+  req.adminDb = db;
+  return next();
+}
+
+app.get("/api/admin/overview", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const overview = await loadAdminOverview(req.adminDb);
+    return res.json({ ok: true, ...overview, admin: { name: req.adminUser?.name || ADMIN_NAME, email: req.adminUser?.email || ADMIN_EMAIL } });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Admin overview unavailable." });
+  }
+});
+
+app.get("/api/admin/health", authMiddleware, requireAdmin, async (req, res) => {
+  const mongo = safeMongoLink();
+  const dbStatus = req.adminDb ? "ok" : "down";
+  const platformChecks = await Promise.all([
+    checkHttpService("GitHub", "https://api.github.com/rate_limit", {
+      headers: { Accept: "application/vnd.github+json" },
+    }),
+    checkHttpService("LeetCode", "https://leetcode.com"),
+    checkHttpService("CodeChef", "https://www.codechef.com"),
+    checkHttpService("HackerRank", "https://www.hackerrank.com"),
+  ]);
+
+  return res.json({
+    ok: true,
+    checkedAt: new Date().toISOString(),
+    services: [
+      {
+        name: "Backend API",
+        status: "ok",
+        detail: `Running on port ${PORT}`,
+        code: 200,
+      },
+      {
+        name: "MongoDB",
+        status: dbStatus,
+        detail: req.adminDb ? "Connected" : mongo.configured ? "Configured but not connected" : "Not configured",
+        link: mongo.href,
+        display: mongo.display,
+      },
+      ...platformChecks,
+    ],
+  });
+});
+
+app.get("/api/admin/recruiters", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const overview = await loadAdminOverview(req.adminDb);
+    return res.json({ ok: true, recruiters: overview.recruiterQueue, counts: overview.counts });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Recruiter list unavailable." });
+  }
+});
+
+app.post("/api/admin/recruiters/:id/approve", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const result = await updateUserVerificationStatus(req.params.id, "verified", req.adminUser?.email || ADMIN_EMAIL);
+    if (!result.ok) return res.status(404).json({ error: "Recruiter not found." });
+    return res.json({ ok: true, status: "verified", storage: result.storage || "mongodb" });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Could not approve recruiter." });
+  }
+});
+
+app.post("/api/admin/recruiters/:id/reject", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const result = await updateUserVerificationStatus(req.params.id, "rejected", req.adminUser?.email || ADMIN_EMAIL);
+    if (!result.ok) return res.status(404).json({ error: "Recruiter not found." });
+    return res.json({ ok: true, status: "rejected", storage: result.storage || "mongodb" });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Could not reject recruiter." });
   }
 });
 
@@ -2579,6 +2968,12 @@ app.post("/api/chatbot", authMiddleware, async (req, res) => {
     reply: `I can help with hire probability, role fit, skill gaps, roadmap, resume readiness, contests today, and project choices. Current snapshot: hire ${hireProbability}%, role ${safeRole}, LeetCode solved ${leet.total || 0}, CodeChef solved ${cc.solved || 0}, GitHub repos ${gh.repos || 0}.`,
   });
 });
+
+try {
+  await seedAdminAccount();
+} catch {
+  // ignore seed errors; admin can still be created later if MongoDB becomes available
+}
 
 app.listen(PORT, () => {
   console.log(`NextHire backend running on http://localhost:${PORT}`);

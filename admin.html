@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NextHire - Admin Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="admin-page">
+    <div class="admin-shell">
+      <aside class="admin-sidebar" aria-label="Admin navigation">
+        <a class="admin-brand" href="#overview" aria-label="NextHire admin overview">
+          <span class="logo">NH</span>
+          <span>
+            <span class="eyebrow">NextHire</span>
+            <strong>Admin Console</strong>
+          </span>
+        </a>
+
+        <nav class="admin-nav">
+          <a href="#overview" class="is-active">Overview</a>
+          <a href="#recruiters">Approvals</a>
+          <a href="#users">Users</a>
+          <a href="#pages">Screens</a>
+          <a href="#health">Health</a>
+        </nav>
+
+        <div class="admin-sidebar-status">
+          <span class="status-dot"></span>
+          <span>Secure admin workspace</span>
+        </div>
+
+        <div class="admin-sidebar-footer">
+          <span class="muted small">Signed in as</span>
+          <strong id="admin-name">Admin</strong>
+          <span class="muted small" id="admin-email">admin@nexthire.local</span>
+          <button id="admin-logout" class="ghost" type="button">Log out</button>
+        </div>
+      </aside>
+
+      <main class="admin-main">
+        <header class="admin-topbar" id="overview">
+          <div>
+            <p class="eyebrow">Operations dashboard</p>
+            <h1>Platform Control</h1>
+            <p class="muted">Review recruiter access, monitor adoption, and keep core NextHire screens visible.</p>
+          </div>
+          <div class="admin-topbar-actions">
+            <span id="status-text" class="admin-status">Loading...</span>
+            <button id="admin-refresh" class="primary" type="button">Refresh data</button>
+            </div>
+        </header>
+
+        <section class="metric-grid" id="admin-metrics" aria-label="Platform metrics"></section>
+
+        <section class="admin-panel" id="health">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">System Health</p>
+              <h2>Services and integrations</h2>
+            </div>
+            <span id="health-updated" class="pill">Checking</span>
+          </div>
+          <div class="health-grid" id="service-health"></div>
+        </section>
+
+        <section class="admin-workspace">
+          <article class="admin-panel approval-panel" id="recruiters">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Recruiter Review</p>
+                <h2>Approval queue</h2>
+              </div>
+              <span id="recruiter-count" class="pill">0 pending</span>
+            </div>
+            <div id="recruiter-queue" class="queue-list"></div>
+          </article>
+
+          <aside class="admin-aside">
+            <article class="admin-panel compact-panel" id="content-summary">
+              <div class="section-head tight">
+                <div>
+                  <p class="eyebrow">Jobs & Content</p>
+                  <h2>System totals</h2>
+                </div>
+                <span class="pill">Dataset-backed</span>
+              </div>
+              <div class="content-list" id="content-stats"></div>
+            </article>
+
+            <article class="admin-panel compact-panel" id="pages">
+              <div class="section-head tight">
+                <div>
+                  <p class="eyebrow">Screens</p>
+                  <h2>Live pages</h2>
+                </div>
+                <span id="page-count" class="pill">0 pages</span>
+              </div>
+              <div id="page-grid" class="page-grid"></div>
+            </article>
+
+            <article class="admin-panel compact-panel admin-access-panel">
+              <div class="section-head tight">
+                <div>
+                  <p class="eyebrow">Admin Access</p>
+                  <h2>Protected controls</h2>
+                </div>
+              </div>
+              <ul class="admin-checklist">
+                <li>Use the same login screen as every user.</li>
+                <li>Admin accounts are seeded by the backend, not signup.</li>
+                <li>Recruiters cannot log in until approved here.</li>
+              </ul>
+            </article>
+          </aside>
+        </section>
+
+        <section class="admin-panel" id="users">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Users</p>
+              <h2>Recent account activity</h2>
+            </div>
+            <span id="user-count" class="pill">0 users</span>
+          </div>
+          <div class="table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Joined</th>
+                </tr>
+              </thead>
+              <tbody id="recent-user-table"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="admin.js"></script>
+  </body>
+</html>
