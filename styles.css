@@ -2899,3 +2899,232 @@ body.admin-page .muted {
 .health-link.readonly {
   color: var(--admin-muted);
 }
+
+.create-option-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.create-option,
+.posted-card,
+.question-row,
+.opportunity-card {
+  border: 1px solid var(--admin-border, rgba(148, 163, 184, 0.25));
+  background: var(--admin-surface-2, rgba(15, 23, 42, 0.55));
+  border-radius: 8px;
+}
+
+.create-option {
+  padding: 16px;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.create-option strong,
+.create-option span {
+  display: block;
+}
+
+.create-option span {
+  margin-top: 6px;
+  color: var(--admin-muted, #8aa0b5);
+  line-height: 1.45;
+}
+
+.icon-action {
+  width: 42px;
+  min-width: 42px;
+  padding: 0;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.admin-form,
+.admin-form-subgrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.admin-form label,
+.admin-form-subgrid label,
+.opportunity-apply-grid input,
+.opportunity-apply-grid textarea,
+.opportunity-question input {
+  min-width: 0;
+}
+
+.admin-form label,
+.admin-form-subgrid label,
+.opportunity-question {
+  display: grid;
+  gap: 7px;
+  color: var(--admin-muted, #8aa0b5);
+  font-size: 0.9rem;
+}
+
+.admin-form input,
+.admin-form select,
+.admin-form textarea,
+.opportunity-apply-grid input,
+.opportunity-apply-grid textarea,
+.opportunity-question input {
+  width: 100%;
+  border: 1px solid var(--admin-border, rgba(148, 163, 184, 0.35));
+  border-radius: 8px;
+  padding: 10px 11px;
+  background: #fff;
+  color: #102033;
+}
+
+.admin-form .full,
+.admin-form-subgrid.full,
+.admin-form-subgrid .full,
+.question-builder,
+.opportunity-apply-grid textarea {
+  grid-column: 1 / -1;
+}
+
+.form-section-title {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(13, 159, 140, 0.1);
+  color: var(--admin-navy, #123252);
+}
+
+.form-section-title span {
+  color: var(--admin-muted, #61758a);
+  font-size: 0.88rem;
+}
+
+.question-builder .section-head {
+  margin-bottom: 10px;
+}
+
+.question-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.question-row-head,
+.posted-card-head,
+.opportunity-card-head,
+.posted-meta,
+.opportunity-meta,
+.analytics-downloads,
+.opportunity-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.question-row-head {
+  grid-column: 1 / -1;
+}
+
+.posted-list,
+.opportunities-list {
+  display: grid;
+  gap: 14px;
+}
+
+.posted-card,
+.opportunity-card {
+  padding: 16px;
+}
+
+.posted-card h3,
+.opportunity-card h4 {
+  margin: 8px 0 0;
+  color: var(--admin-navy, #e7eef8);
+}
+
+.posted-card p,
+.opportunity-card p {
+  line-height: 1.55;
+}
+
+.posted-meta,
+.opportunity-meta,
+.opportunity-tags,
+.opportunity-attachments {
+  margin: 10px 0;
+}
+
+.posted-meta span,
+.opportunity-meta span,
+.opportunity-tags span,
+.opportunity-attachments span {
+  display: inline-flex;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: var(--admin-muted, #9fb0c4);
+  font-size: 0.82rem;
+}
+
+.admin-analytics-card,
+.opportunities-card {
+  max-width: 980px;
+}
+
+.analytics-downloads {
+  justify-content: flex-start;
+  margin: 12px 0 18px;
+}
+
+.opportunity-tabs {
+  justify-content: flex-start;
+  margin: 12px 0;
+}
+
+.opportunity-tab.active {
+  border-color: #0d9f8c;
+  color: #0d9f8c;
+}
+
+.opportunity-apply-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.opportunity-question-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.opportunity-question {
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 8px;
+}
+
+.opportunity-question small {
+  color: var(--muted, #8aa0b5);
+}
+
+@media (max-width: 780px) {
+  .create-option-grid,
+  .admin-form,
+  .admin-form-subgrid,
+  .question-row,
+  .opportunity-apply-grid {
+    grid-template-columns: 1fr;
+  }
+}

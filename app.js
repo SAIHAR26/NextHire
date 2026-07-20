@@ -50,6 +50,13 @@ const papersCloseBtn = document.getElementById("papers-close");
 const papersList = document.getElementById("papers-list");
 const mockInterviewBtn = document.getElementById("mock-interview-btn");
 const activityMockInterviewBtn = document.getElementById("activity-mock-interview-btn");
+const opportunitiesBtn = document.getElementById("opportunities-btn");
+const activityOpportunitiesBtn = document.getElementById("activity-opportunities-btn");
+const opportunitiesModal = document.getElementById("opportunities-modal");
+const opportunitiesCloseBtn = document.getElementById("opportunities-close");
+const opportunitiesStatus = document.getElementById("opportunities-status");
+const opportunitiesList = document.getElementById("opportunities-list");
+const opportunityTabs = document.querySelectorAll(".opportunity-tab");
 const mockModal = document.getElementById("mock-modal");
 const mockCloseBtn = document.getElementById("mock-close");
 const mockTypeSelect = document.getElementById("mock-type");
@@ -79,6 +86,8 @@ const state = {
   chatHistory: [],
   currentMockPaper: null,
   currentMockQuestions: [],
+  opportunities: [],
+  opportunityFilter: "all",
 };
 
 function resetKpis() {
@@ -3445,6 +3454,202 @@ if (papersModal) {
   });
 }
 
+function setOpportunitiesStatus(message, type = "muted") {
+  if (!opportunitiesStatus) return;
+  opportunitiesStatus.className = `status ${type}`.trim();
+  opportunitiesStatus.textContent = message;
+}
+
+function opportunityTypeLabel(type = "job") {
+  if (type === "event") return "Contest / Event";
+  if (type === "quiz") return "Quiz";
+  return "Job";
+}
+
+function formatOpportunityDate(value) {
+  if (!value) return "Open";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Open";
+  return date.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function renderOpportunityQuestions(item) {
+  const questions = item.type === "quiz" ? item.quiz?.questions || [] : item.event?.questions || [];
+  if (!questions.length) return "";
+  return `
+    <div class="opportunity-question-list">
+      ${questions.map((q, idx) => `
+        <label class="opportunity-question">
+          <span>Q${idx + 1}. ${escapeHtml(q.question || "Question")}</span>
+          ${Array.isArray(q.options) && q.options.length ? `<small>${escapeHtml(q.options.join(" / "))}</small>` : ""}
+          <input class="opp-answer" data-idx="${idx}" type="text" placeholder="Your answer" />
+        </label>
+      `).join("")}
+    </div>
+  `;
+}
+
+function opportunityCard(item) {
+  const isAssessment = item.type === "quiz" || (item.type === "event" && Array.isArray(item.event?.questions) && item.event.questions.length > 0);
+  const source = item.creatorRole === "recruiter" ? "Recruiter posted" : "Admin posted";
+  const details = item.type === "job"
+    ? [item.job?.role, item.job?.employmentType, item.job?.salary, item.job?.eligibility].filter(Boolean)
+    : [item.event?.category, item.mode, item.startAt ? `Starts ${formatOpportunityDate(item.startAt)}` : ""].filter(Boolean);
+  return `
+    <article class="opportunity-card" data-id="${escapeHtml(item.id)}" data-type="${escapeHtml(item.type)}">
+      <div class="opportunity-card-head">
+        <div>
+          <span class="pill">${escapeHtml(opportunityTypeLabel(item.type))}</span>
+          <h4>${escapeHtml(item.title || item.name || "Opportunity")}</h4>
+        </div>
+        <span class="pill ${item.creatorRole === "recruiter" ? "warning" : "success"}">${escapeHtml(source)}</span>
+      </div>
+      <p>${escapeHtml(item.description || "No description provided.")}</p>
+      <div class="opportunity-meta">
+        <span>${escapeHtml(item.organization || "NextHire")}</span>
+        <span>${escapeHtml(item.location || "Remote")}</span>
+        <span>Deadline ${escapeHtml(formatOpportunityDate(item.deadline))}</span>
+      </div>
+      ${details.length ? `<div class="opportunity-tags">${details.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>` : ""}
+      ${Array.isArray(item.attachments) && item.attachments.length ? `<div class="opportunity-attachments">${item.attachments.map((file) => `<span>${escapeHtml(file.name || "Attachment")}</span>`).join("")}</div>` : ""}
+      ${renderOpportunityQuestions(item)}
+      <div class="opportunity-apply-grid">
+        <input class="opp-name" type="text" placeholder="Full name" value="${escapeHtml(localStorage.getItem("nexthire_name") || "")}" />
+        <input class="opp-email" type="email" placeholder="Email" />
+        <input class="opp-phone" type="text" placeholder="Phone" />
+        <input class="opp-college" type="text" placeholder="College" />
+        <input class="opp-portfolio" type="url" placeholder="Portfolio / LinkedIn" />
+        <input class="opp-resume" type="url" placeholder="Resume link" />
+        <textarea class="opp-note" rows="2" placeholder="Short note"></textarea>
+      </div>
+      <div class="actions">
+        <button type="button" class="primary opp-apply-btn">${item.type === "job" ? "Apply" : "Register"}</button>
+        ${isAssessment ? `<button type="button" class="ghost opp-submit-quiz-btn">Submit Answers</button>` : ""}
+        ${item.event?.registrationLink ? `<a class="ghost" href="${escapeHtml(item.event.registrationLink)}" target="_blank" rel="noopener noreferrer">Open Link</a>` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function renderOpportunities() {
+  if (!opportunitiesList) return;
+  const filter = state.opportunityFilter || "all";
+  const items = (state.opportunities || []).filter((item) => filter === "all" || item.type === filter);
+  opportunitiesList.innerHTML = items.length
+    ? items.map(opportunityCard).join("")
+    : `<div class="empty-state"><strong>No posts found</strong><span>Admin or recruiter posts will appear here.</span></div>`;
+  opportunitiesList.querySelectorAll(".opp-apply-btn").forEach((button) => {
+    button.addEventListener("click", () => submitOpportunityApplication(button));
+  });
+  opportunitiesList.querySelectorAll(".opp-submit-quiz-btn").forEach((button) => {
+    button.addEventListener("click", () => submitOpportunityQuiz(button));
+  });
+}
+
+async function loadOpportunities() {
+  setOpportunitiesStatus("Loading posts...", "muted");
+  try {
+    const data = await fetchWithAuth("/api/opportunities");
+    state.opportunities = data.opportunities || [];
+    renderOpportunities();
+    setOpportunitiesStatus(`Showing ${state.opportunities.length} posted item(s).`, "ok");
+  } catch (err) {
+    setOpportunitiesStatus(err.message || "Could not load posts.", "warn");
+  }
+}
+
+function openOpportunitiesModal() {
+  opportunitiesModal?.classList.remove("hidden");
+  loadOpportunities();
+}
+
+function closeOpportunitiesModal() {
+  opportunitiesModal?.classList.add("hidden");
+}
+
+function collectOpportunityForm(card) {
+  return {
+    name: card.querySelector(".opp-name")?.value || "",
+    email: card.querySelector(".opp-email")?.value || "",
+    phone: card.querySelector(".opp-phone")?.value || "",
+    college: card.querySelector(".opp-college")?.value || "",
+    portfolio: card.querySelector(".opp-portfolio")?.value || "",
+    resumeLink: card.querySelector(".opp-resume")?.value || "",
+    note: card.querySelector(".opp-note")?.value || "",
+  };
+}
+
+async function submitOpportunityApplication(button) {
+  const card = button.closest(".opportunity-card");
+  const id = card?.dataset?.id;
+  if (!id) return;
+  button.disabled = true;
+  try {
+    await fetchWithAuth(`/api/opportunities/${encodeURIComponent(id)}/apply`, {
+      method: "POST",
+      body: JSON.stringify(collectOpportunityForm(card)),
+    });
+    setOpportunitiesStatus("Application saved. Admin can view it in analytics.", "ok");
+    logActivity("opportunity_applied", { type: card.dataset.type || "job", id });
+  } catch (err) {
+    setOpportunitiesStatus(err.message || "Could not apply.", "warn");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function submitOpportunityQuiz(button) {
+  const card = button.closest(".opportunity-card");
+  const id = card?.dataset?.id;
+  if (!id) return;
+  const answers = Array.from(card.querySelectorAll(".opp-answer")).map((input) => ({ answer: input.value || "" }));
+  button.disabled = true;
+  try {
+    const data = await fetchWithAuth(`/api/opportunities/${encodeURIComponent(id)}/quiz-submit`, {
+      method: "POST",
+      body: JSON.stringify({ answers }),
+    });
+    const result = data.result || {};
+    setOpportunitiesStatus(`Submitted. Score ${result.score || 0}/${result.total || 0} (${result.percentage || 0}%).`, "ok");
+    logActivity("opportunity_quiz_submitted", { id, score: result.percentage || 0 });
+  } catch (err) {
+    setOpportunitiesStatus(err.message || "Could not submit answers.", "warn");
+  } finally {
+    button.disabled = false;
+  }
+}
+if (opportunitiesBtn) {
+  opportunitiesBtn.addEventListener("click", () => {
+    openOpportunitiesModal();
+  });
+}
+
+if (activityOpportunitiesBtn) {
+  activityOpportunitiesBtn.addEventListener("click", () => {
+    closeActivityModal();
+    openOpportunitiesModal();
+  });
+}
+
+if (opportunitiesCloseBtn) {
+  opportunitiesCloseBtn.addEventListener("click", () => {
+    closeOpportunitiesModal();
+  });
+}
+
+if (opportunitiesModal) {
+  opportunitiesModal.addEventListener("click", (event) => {
+    if (event.target === opportunitiesModal) closeOpportunitiesModal();
+  });
+}
+
+opportunityTabs.forEach((button) => {
+  button.addEventListener("click", () => {
+    state.opportunityFilter = button.dataset.filter || "all";
+    opportunityTabs.forEach((tab) => tab.classList.toggle("active", tab === button));
+    renderOpportunities();
+  });
+});
 if (mockInterviewBtn) {
   mockInterviewBtn.addEventListener("click", () => {
     openMockInterviewModal();

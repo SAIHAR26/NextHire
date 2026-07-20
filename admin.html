@@ -20,6 +20,8 @@
         <nav class="admin-nav">
           <a href="#overview" class="is-active">Overview</a>
           <a href="#recruiters">Approvals</a>
+          <a href="#post-builder">Create</a>
+          <a href="#posted-content">Posts</a>
           <a href="#users">Users</a>
           <a href="#pages">Screens</a>
           <a href="#health">Health</a>
@@ -47,11 +49,75 @@
           </div>
           <div class="admin-topbar-actions">
             <span id="status-text" class="admin-status">Loading...</span>
+            <button id="admin-add-toggle" class="primary icon-action" type="button" title="Add content">+</button>
             <button id="admin-refresh" class="primary" type="button">Refresh data</button>
             </div>
         </header>
 
         <section class="metric-grid" id="admin-metrics" aria-label="Platform metrics"></section>
+        <section class="admin-panel post-builder-panel" id="post-builder">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Create Post</p>
+              <h2>Add job, event, or quiz</h2>
+            </div>
+            <span class="pill">Admin publishing</span>
+          </div>
+          <div id="admin-create-options" class="create-option-grid hidden">
+            <button type="button" class="create-option" data-type="job"><strong>Add Job</strong><span>Role details, eligibility, attachments, and application tracking.</span></button>
+            <button type="button" class="create-option" data-type="event"><strong>Add Event</strong><span>Contest or event schedule, rules, links, and optional questions.</span></button>
+            <button type="button" class="create-option" data-type="quiz"><strong>Add Quiz</strong><span>Instructions, duration, questions, options, and answer key.</span></button>
+          </div>
+          <form id="admin-post-form" class="admin-form hidden">
+            <input type="hidden" id="post-type" value="job" />
+            <div class="form-section-title"><strong id="post-form-title">Add Job</strong><span>Fill the details before posting.</span></div>
+            <label>Name / Title<input id="post-title" type="text" required placeholder="Frontend Developer Internship" /></label>
+            <label>Organization / Company<input id="post-organization" type="text" placeholder="NextHire" /></label>
+            <label class="full">Description<textarea id="post-description" rows="4" required placeholder="Describe the opportunity, expectations, and selection process."></textarea></label>
+            <label>Location<input id="post-location" type="text" placeholder="Remote / Hyderabad" /></label>
+            <label>Mode<select id="post-mode"><option>Online</option><option>Offline</option><option>Hybrid</option></select></label>
+            <label>Deadline<input id="post-deadline" type="datetime-local" /></label>
+            <label>Skills / Tags<input id="post-skills" type="text" placeholder="JavaScript, DSA, MongoDB" /></label>
+            <div id="job-fields" class="admin-form-subgrid full">
+              <label>Role<input id="job-role" type="text" placeholder="Software Engineer Intern" /></label>
+              <label>Employment Type<input id="job-employment" type="text" placeholder="Internship / Full time" /></label>
+              <label>Salary / Stipend<input id="job-salary" type="text" placeholder="Optional" /></label>
+              <label>Eligibility<input id="job-eligibility" type="text" placeholder="2026 batch, CGPA 7+" /></label>
+              <label class="full">Application Instructions<textarea id="job-instructions" rows="3" placeholder="Ask candidates to upload resume, portfolio, or documents."></textarea></label>
+              <label class="full">PDF / Excel Attachments<input id="job-attachments" type="file" multiple accept=".pdf,.xls,.xlsx,.csv,.doc,.docx" /></label>
+            </div>
+            <div id="event-fields" class="admin-form-subgrid full hidden">
+              <label>Category<input id="event-category" type="text" placeholder="Contest / Workshop / Hackathon" /></label>
+              <label>Start Time<input id="event-start" type="datetime-local" /></label>
+              <label>End Time<input id="event-end" type="datetime-local" /></label>
+              <label>Registration Link<input id="event-link" type="url" placeholder="https://" /></label>
+              <label class="full">Rules / Format<textarea id="event-rules" rows="3" placeholder="Explain rounds, scoring, team size, and requirements."></textarea></label>
+            </div>
+            <div id="quiz-fields" class="admin-form-subgrid full hidden">
+              <label>Duration Minutes<input id="quiz-duration" type="number" min="1" value="30" /></label>
+              <label class="full">Quiz Instructions<textarea id="quiz-instructions" rows="3" placeholder="Tell candidates how to attempt the quiz."></textarea></label>
+              <div class="full question-builder">
+                <div class="section-head tight"><strong>Questions</strong><button type="button" id="add-question-btn" class="ghost">Add Question</button></div>
+                <div id="question-list"></div>
+              </div>
+            </div>
+            <div class="actions full">
+              <button type="submit" class="primary">Post</button>
+              <button type="button" id="post-reset" class="ghost">Clear</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="admin-panel" id="posted-content">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Published Content</p>
+              <h2>Jobs, events, and quizzes</h2>
+            </div>
+            <span id="posted-count" class="pill">0 posts</span>
+          </div>
+          <div id="posted-list" class="posted-list"></div>
+        </section>
 
         <section class="admin-panel" id="health">
           <div class="section-head">
@@ -140,6 +206,22 @@
         </section>
       </main>
     </div>
-    <script src="admin.js"></script>
+    <div id="analytics-modal" class="activity-modal hidden" role="dialog" aria-modal="true" aria-label="Post Analytics">
+      <div class="activity-card admin-analytics-card">
+        <div class="activity-head">
+          <h3 id="analytics-title">Post Analytics</h3>
+          <button type="button" id="analytics-close" class="ghost">Close</button>
+        </div>
+        <div id="analytics-summary" class="activity-summary"></div>
+        <div class="analytics-downloads">
+          <button type="button" class="ghost export-btn" data-format="csv">Download CSV</button>
+          <button type="button" class="ghost export-btn" data-format="xls">Download Excel</button>
+          <button type="button" class="ghost export-btn" data-format="pdf">Download PDF</button>
+          <button type="button" class="ghost export-btn" data-format="json">Download JSON</button>
+        </div>
+        <div id="analytics-table" class="table-wrap"></div>
+      </div>
+    </div>
+    <script src="admin.js?v=3"></script>
   </body>
 </html>

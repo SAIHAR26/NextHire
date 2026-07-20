@@ -1623,6 +1623,396 @@ app.post("/api/admin/recruiters/:id/reject", authMiddleware, requireAdmin, async
   }
 });
 
+function normalizeOpportunityType(value = "") {
+  const type = String(value || "").trim().toLowerCase();
+  if (["job", "event", "quiz"].includes(type)) return type;
+  if (["contest", "contests"].includes(type)) return "event";
+  return "job";
+}
+
+function normalizeList(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean);
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeQuestion(item = {}, idx = 0) {
+  const options = normalizeList(item.options || item.choices);
+  return {
+    id: String(item.id || `q_${idx + 1}`),
+    question: String(item.question || item.title || "").trim(),
+    description: String(item.description || "").trim(),
+    options,
+    answer: String(item.answer || "").trim(),
+    points: Math.max(1, Number(item.points) || 1),
+  };
+}
+
+function serializeOpportunity(doc = {}) {
+  const id = String(doc._id || doc.id || "");
+  const type = normalizeOpportunityType(doc.type);
+  return {
+    id,
+    type,
+    title: doc.title || doc.name || "Untitled",
+    name: doc.name || doc.title || "Untitled",
+    description: doc.description || "",
+    organization: doc.organization || doc.company || "NextHire",
+    location: doc.location || "Remote",
+    mode: doc.mode || "Online",
+    status: doc.status || "published",
+    tags: Array.isArray(doc.tags) ? doc.tags : [],
+    skills: Array.isArray(doc.skills) ? doc.skills : [],
+    createdBy: doc.createdBy || null,
+    creatorName: doc.creatorName || "Admin",
+    creatorRole: doc.creatorRole || "admin",
+    createdAt: doc.createdAt || null,
+    updatedAt: doc.updatedAt || null,
+    deadline: doc.deadline || "",
+    startAt: doc.startAt || "",
+    endAt: doc.endAt || "",
+    job: doc.job || {},
+    event: doc.event || {},
+    quiz: {
+      durationMinutes: Number(doc.quiz?.durationMinutes || 0) || 0,
+      instructions: doc.quiz?.instructions || "",
+      questions: Array.isArray(doc.quiz?.questions) ? doc.quiz.questions.map(normalizeQuestion) : [],
+    },
+    attachments: Array.isArray(doc.attachments) ? doc.attachments : [],
+    applicationCount: Number(doc.applicationCount || 0),
+    submissionCount: Number(doc.submissionCount || 0),
+  };
+}
+
+function buildOpportunityDoc(payload = {}, user = {}) {
+  const type = normalizeOpportunityType(payload.type);
+  const title = String(payload.title || payload.name || "").trim();
+  const description = String(payload.description || "").trim();
+  if (!title) throw new Error("Name/title is required.");
+  if (!description) throw new Error("Description is required.");
+  const base = {
+    type,
+    title,
+    name: String(payload.name || title).trim(),
+    description,
+    organization: String(payload.organization || payload.company || "NextHire").trim(),
+    location: String(payload.location || "Remote").trim(),
+    mode: String(payload.mode || "Online").trim(),
+    status: String(payload.status || "published").trim().toLowerCase(),
+    tags: normalizeList(payload.tags),
+    skills: normalizeList(payload.skills),
+    deadline: String(payload.deadline || "").trim(),
+    startAt: String(payload.startAt || "").trim(),
+    endAt: String(payload.endAt || "").trim(),
+    attachments: Array.isArray(payload.attachments)
+      ? payload.attachments.map((file) => ({
+          name: String(file.name || "Attachment").trim(),
+          type: String(file.type || "").trim(),
+          size: Number(file.size || 0) || 0,
+          note: String(file.note || "").trim(),
+        }))
+      : [],
+    createdBy: String(user._id || user.id || ""),
+    creatorName: user.name || "Admin",
+    creatorRole: String(user.role || "admin").toLowerCase(),
+    updatedAt: new Date(),
+  };
+  if (type === "job") {
+    base.job = {
+      role: String(payload.role || payload.job?.role || title).trim(),
+      employmentType: String(payload.employmentType || payload.job?.employmentType || "Full time").trim(),
+      salary: String(payload.salary || payload.job?.salary || "").trim(),
+      eligibility: String(payload.eligibility || payload.job?.eligibility || "").trim(),
+      applyInstructions: String(payload.applyInstructions || payload.job?.applyInstructions || "Apply with your latest profile and resume.").trim(),
+    };
+  }
+  if (type === "event") {
+    base.event = {
+      category: String(payload.category || payload.event?.category || "Contest").trim(),
+      venue: String(payload.venue || payload.event?.venue || base.location).trim(),
+      registrationLink: String(payload.registrationLink || payload.event?.registrationLink || "").trim(),
+      rules: String(payload.rules || payload.event?.rules || "").trim(),
+      questions: Array.isArray(payload.questions || payload.event?.questions)
+        ? (payload.questions || payload.event?.questions).map(normalizeQuestion).filter((q) => q.question)
+        : [],
+    };
+  }
+  if (type === "quiz") {
+    const questions = Array.isArray(payload.questions || payload.quiz?.questions)
+      ? (payload.questions || payload.quiz?.questions).map(normalizeQuestion).filter((q) => q.question)
+      : [];
+    base.quiz = {
+      durationMinutes: Math.max(1, Number(payload.durationMinutes || payload.quiz?.durationMinutes || 30) || 30),
+      instructions: String(payload.instructions || payload.quiz?.instructions || "Answer all questions before submitting.").trim(),
+      questions,
+    };
+  }
+  return base;
+}
+
+async function listOpportunities(db, filter = {}) {
+  if (db) {
+    const query = { status: { $ne: "archived" } };
+    if (filter.type) query.type = normalizeOpportunityType(filter.type);
+    const docs = await db.collection("opportunities").find(query).sort({ createdAt: -1 }).toArray();
+    const ids = docs.map((doc) => String(doc._id));
+    const appCounts = await db.collection("opportunityApplications").aggregate([
+      { $match: { opportunityId: { $in: ids } } },
+      { $group: { _id: "$opportunityId", count: { $sum: 1 } } },
+    ]).toArray();
+    const submitCounts = await db.collection("quizSubmissions").aggregate([
+      { $match: { opportunityId: { $in: ids } } },
+      { $group: { _id: "$opportunityId", count: { $sum: 1 } } },
+    ]).toArray();
+    const appMap = new Map(appCounts.map((row) => [String(row._id), row.count]));
+    const submitMap = new Map(submitCounts.map((row) => [String(row._id), row.count]));
+    return docs.map((doc) => serializeOpportunity({ ...doc, applicationCount: appMap.get(String(doc._id)) || 0, submissionCount: submitMap.get(String(doc._id)) || 0 }));
+  }
+  return memoryOpportunities
+    .filter((doc) => doc.status !== "archived" && (!filter.type || doc.type === normalizeOpportunityType(filter.type)))
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+    .map((doc) => serializeOpportunity({
+      ...doc,
+      applicationCount: memoryOpportunityApplications.filter((row) => row.opportunityId === String(doc.id)).length,
+      submissionCount: memoryQuizSubmissions.filter((row) => row.opportunityId === String(doc.id)).length,
+    }));
+}
+
+async function findOpportunity(db, id) {
+  const safeId = String(id || "").trim();
+  if (!safeId) return null;
+  if (db && ObjectId.isValid(safeId)) {
+    const doc = await db.collection("opportunities").findOne({ _id: new ObjectId(safeId) });
+    return doc ? serializeOpportunity(doc) : null;
+  }
+  const doc = memoryOpportunities.find((item) => String(item.id) === safeId);
+  return doc ? serializeOpportunity(doc) : null;
+}
+
+function applicationRow(user = {}, payload = {}) {
+  return {
+    userId: String(user._id || user.id || ""),
+    name: String(payload.name || user.name || "Candidate").trim(),
+    email: normalizeEmail(payload.email || user.email || ""),
+    phone: String(payload.phone || "").trim(),
+    college: String(payload.college || "").trim(),
+    resumeLink: String(payload.resumeLink || "").trim(),
+    portfolio: String(payload.portfolio || "").trim(),
+    note: String(payload.note || payload.coverLetter || "").trim(),
+    status: "applied",
+    appliedAt: new Date(),
+  };
+}
+
+function csvEscape(value = "") {
+  const safe = String(value ?? "");
+  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+}
+
+function pdfEscape(value = "") {
+  return String(value ?? "").replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+}
+
+function buildSimplePdf(lines = []) {
+  const safeLines = lines.length ? lines : ["No data available"];
+  const content = ["BT", "/F1 11 Tf", "50 790 Td", "14 TL", ...safeLines.slice(0, 48).map((line, idx) => `${idx === 0 ? "" : "T* "}(${pdfEscape(line).slice(0, 110)}) Tj`), "ET"].join("\n");
+  const objects = [
+    "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj",
+    "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj",
+    "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj",
+    "4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj",
+    `5 0 obj\n<< /Length ${Buffer.byteLength(content, "utf8")} >>\nstream\n${content}\nendstream\nendobj`,
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((obj) => {
+    offsets.push(Buffer.byteLength(pdf, "utf8"));
+    pdf += `${obj}\n`;
+  });
+  const xrefAt = Buffer.byteLength(pdf, "utf8");
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefAt}\n%%EOF`;
+  return Buffer.from(pdf, "utf8");
+}
+function buildAnalyticsExport(opportunity, applications, format) {
+  const rows = applications.map((app) => ({
+    Name: app.name || "",
+    Email: app.email || "",
+    Phone: app.phone || "",
+    College: app.college || "",
+    Resume: app.resumeLink || "",
+    Portfolio: app.portfolio || "",
+    Note: app.note || "",
+    Status: app.status || "applied",
+    AppliedAt: app.appliedAt || "",
+  }));
+  if (format === "json") return { body: JSON.stringify({ opportunity, applications: rows }, null, 2), type: "application/json", ext: "json" };
+  const headers = Object.keys(rows[0] || { Name: "", Email: "", Phone: "", College: "", Resume: "", Portfolio: "", Note: "", Status: "", AppliedAt: "" });
+  const csv = [headers.join(","), ...rows.map((row) => headers.map((key) => csvEscape(row[key])).join(","))].join("\n");
+  if (format === "xls") {
+    const htmlRows = rows.map((row) => `<tr>${headers.map((key) => `<td>${String(row[key] || "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]))}</td>`).join("")}</tr>`).join("");
+    return { body: `<table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${htmlRows}</tbody></table>`, type: "application/vnd.ms-excel", ext: "xls" };
+  }
+  if (format === "pdf") {
+    const lines = [`${opportunity.title} - Applicant Analytics`, "", ...rows.map((row, idx) => `${idx + 1}. ${row.Name} | ${row.Email} | ${row.Phone} | ${row.College} | ${row.Status}`)];
+    return { body: buildSimplePdf(lines), type: "application/pdf", ext: "pdf" };
+  }
+  return { body: csv, type: "text/csv", ext: "csv" };
+}
+
+app.get("/api/admin/opportunities", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const opportunities = await listOpportunities(req.adminDb, { type: req.query.type });
+    return res.json({ ok: true, opportunities });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Could not load posts." });
+  }
+});
+
+app.post("/api/admin/opportunities", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const doc = buildOpportunityDoc(req.body || {}, req.adminUser || {});
+    if (req.adminDb) {
+      const created = { ...doc, createdAt: new Date() };
+      const result = await req.adminDb.collection("opportunities").insertOne(created);
+      return res.status(201).json({ ok: true, opportunity: serializeOpportunity({ ...created, _id: result.insertedId }) });
+    }
+    const created = { ...doc, id: `opp_${Date.now()}_${Math.random().toString(16).slice(2)}`, createdAt: new Date() };
+    memoryOpportunities.push(created);
+    return res.status(201).json({ ok: true, opportunity: serializeOpportunity(created), storage: "memory" });
+  } catch (err) {
+    return res.status(400).json({ error: err.message || "Could not create post." });
+  }
+});
+
+app.delete("/api/admin/opportunities/:id", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!id) return res.status(400).json({ error: "Post id is required." });
+    if (req.adminDb && ObjectId.isValid(id)) {
+      await req.adminDb.collection("opportunities").updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: "archived", archivedAt: new Date(), updatedAt: new Date() } }
+      );
+      return res.json({ ok: true });
+    }
+    const item = memoryOpportunities.find((row) => String(row.id) === id);
+    if (!item) return res.status(404).json({ error: "Post not found." });
+    item.status = "archived";
+    item.archivedAt = new Date();
+    item.updatedAt = new Date();
+    return res.json({ ok: true, storage: "memory" });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Could not archive post." });
+  }
+});
+app.get("/api/admin/opportunities/:id/analytics", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const opportunity = await findOpportunity(req.adminDb, req.params.id);
+    if (!opportunity) return res.status(404).json({ error: "Post not found." });
+    const applications = req.adminDb
+      ? await req.adminDb.collection("opportunityApplications").find({ opportunityId: opportunity.id }).sort({ appliedAt: -1 }).toArray()
+      : memoryOpportunityApplications.filter((row) => row.opportunityId === opportunity.id).sort((a, b) => new Date(b.appliedAt || 0) - new Date(a.appliedAt || 0));
+    const submissions = req.adminDb
+      ? await req.adminDb.collection("quizSubmissions").find({ opportunityId: opportunity.id }).sort({ submittedAt: -1 }).toArray()
+      : memoryQuizSubmissions.filter((row) => row.opportunityId === opportunity.id).sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
+    return res.json({ ok: true, opportunity, applications, submissions });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Analytics unavailable." });
+  }
+});
+
+app.get("/api/admin/opportunities/:id/export", authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const opportunity = await findOpportunity(req.adminDb, req.params.id);
+    if (!opportunity) return res.status(404).json({ error: "Post not found." });
+    const applications = req.adminDb
+      ? await req.adminDb.collection("opportunityApplications").find({ opportunityId: opportunity.id }).sort({ appliedAt: -1 }).toArray()
+      : memoryOpportunityApplications.filter((row) => row.opportunityId === opportunity.id);
+    const format = String(req.query.format || "csv").toLowerCase();
+    const out = buildAnalyticsExport(opportunity, applications, format);
+    res.setHeader("Content-Type", out.type);
+    res.setHeader("Content-Disposition", `attachment; filename="${opportunity.type}-${opportunity.id}-analytics.${out.ext}"`);
+    return res.send(out.body);
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Export unavailable." });
+  }
+});
+
+app.get("/api/opportunities", authMiddleware, async (req, res) => {
+  try {
+    const db = await getDb();
+    const opportunities = await listOpportunities(db, { type: req.query.type });
+    return res.json({ ok: true, opportunities });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Could not load opportunities." });
+  }
+});
+
+app.post("/api/opportunities/:id/apply", authMiddleware, async (req, res) => {
+  try {
+    const db = await getDb();
+    const opportunity = await findOpportunity(db, req.params.id);
+    if (!opportunity) return res.status(404).json({ error: "Post not found." });
+    const user = await findUserById(db, req.user?.id);
+    const row = { ...applicationRow(user || {}, req.body || {}), opportunityId: opportunity.id, opportunityType: opportunity.type, opportunityTitle: opportunity.title };
+    if (db) {
+      await db.collection("opportunityApplications").updateOne(
+        { opportunityId: opportunity.id, userId: row.userId },
+        { $set: row, $setOnInsert: { createdAt: new Date() } },
+        { upsert: true }
+      );
+    } else {
+      const idx = memoryOpportunityApplications.findIndex((item) => item.opportunityId === row.opportunityId && item.userId === row.userId);
+      if (idx >= 0) memoryOpportunityApplications[idx] = { ...memoryOpportunityApplications[idx], ...row };
+      else memoryOpportunityApplications.push({ ...row, id: `app_${Date.now()}` });
+    }
+    return res.json({ ok: true, application: row });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Could not submit application." });
+  }
+});
+
+app.post("/api/opportunities/:id/quiz-submit", authMiddleware, async (req, res) => {
+  try {
+    const db = await getDb();
+    const opportunity = await findOpportunity(db, req.params.id);
+    if (!opportunity || !["quiz", "event"].includes(opportunity.type)) return res.status(404).json({ error: "Quiz or contest not found." });
+    const questions = opportunity.type === "quiz" ? opportunity.quiz.questions : opportunity.event.questions || [];
+    const answers = Array.isArray(req.body?.answers) ? req.body.answers : [];
+    let score = 0;
+    let total = 0;
+    questions.forEach((q, idx) => {
+      total += Number(q.points || 1) || 1;
+      const given = String(answers[idx]?.answer || answers[idx] || "").trim().toLowerCase();
+      const expected = String(q.answer || "").trim().toLowerCase();
+      if (expected && given === expected) score += Number(q.points || 1) || 1;
+    });
+    const user = await findUserById(db, req.user?.id);
+    const row = {
+      opportunityId: opportunity.id,
+      opportunityTitle: opportunity.title,
+      userId: String(user?._id || user?.id || req.user?.id || ""),
+      name: user?.name || "Candidate",
+      email: user?.email || "",
+      answers,
+      score,
+      total,
+      percentage: total ? Math.round((score / total) * 100) : 0,
+      submittedAt: new Date(),
+    };
+    if (db) await db.collection("quizSubmissions").insertOne(row);
+    else memoryQuizSubmissions.push({ ...row, id: `sub_${Date.now()}` });
+    return res.json({ ok: true, result: row });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Could not submit quiz." });
+  }
+});
 app.get("/api/profile", authMiddleware, async (req, res) => {
   const db = await getDb();
   if (!db) {

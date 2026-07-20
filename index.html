@@ -331,6 +331,7 @@
       <button type="button" id="study-btn" class="ghost">How to Study?</button>
       <button type="button" id="question-papers-btn" class="ghost">Question Papers</button>
       <button type="button" id="mock-interview-btn" class="ghost">Mock Interview</button>
+      <button type="button" id="opportunities-btn" class="ghost">Jobs, Contests & Quizzes</button>
     </div>
     <div id="activity-modal" class="activity-modal hidden" role="dialog" aria-modal="true" aria-label="Activity Heatmap">
       <div class="activity-card">
@@ -360,6 +361,7 @@
           <button type="button" id="activity-study-btn" class="ghost">How to Study?</button>
           <button type="button" id="activity-question-papers-btn" class="ghost">Question Papers</button>
           <button type="button" id="activity-mock-interview-btn" class="ghost">Mock Interview</button>
+          <button type="button" id="activity-opportunities-btn" class="ghost">Jobs, Contests & Quizzes</button>
         </div>
         <div id="activity-log" class="activity-log"></div>
       </div>
@@ -485,6 +487,23 @@
       </div>
     </div>
 
+    <div id="opportunities-modal" class="activity-modal hidden" role="dialog" aria-modal="true" aria-label="Jobs Contests and Quizzes">
+      <div class="activity-card opportunities-card">
+        <div class="activity-head">
+          <h3>Jobs, Contests & Quizzes</h3>
+          <button type="button" id="opportunities-close" class="ghost">Close</button>
+        </div>
+        <p class="muted small">Admin and recruiter posts are shown here as separate opportunity cards.</p>
+        <div class="opportunity-tabs">
+          <button type="button" class="ghost opportunity-tab active" data-filter="all">All</button>
+          <button type="button" class="ghost opportunity-tab" data-filter="job">Jobs</button>
+          <button type="button" class="ghost opportunity-tab" data-filter="event">Contests</button>
+          <button type="button" class="ghost opportunity-tab" data-filter="quiz">Quizzes</button>
+        </div>
+        <div id="opportunities-status" class="status muted">Loading posts...</div>
+        <div id="opportunities-list" class="opportunities-list"></div>
+      </div>
+    </div>
     <div id="resume-modal" class="resume-modal hidden" role="dialog" aria-modal="true">
       <div class="resume-modal-card">
         <div class="resume-modal-head">

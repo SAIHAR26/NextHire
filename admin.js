@@ -17,6 +17,25 @@ const refreshBtn = document.getElementById("admin-refresh");
 const logoutBtn = document.getElementById("admin-logout");
 const serviceHealthEl = document.getElementById("service-health");
 const healthUpdatedEl = document.getElementById("health-updated");
+const addToggleBtn = document.getElementById("admin-add-toggle");
+const createOptionsEl = document.getElementById("admin-create-options");
+const postForm = document.getElementById("admin-post-form");
+const postTypeInput = document.getElementById("post-type");
+const postFormTitle = document.getElementById("post-form-title");
+const jobFields = document.getElementById("job-fields");
+const eventFields = document.getElementById("event-fields");
+const quizFields = document.getElementById("quiz-fields");
+const questionListEl = document.getElementById("question-list");
+const addQuestionBtn = document.getElementById("add-question-btn");
+const postResetBtn = document.getElementById("post-reset");
+const postedListEl = document.getElementById("posted-list");
+const postedCountEl = document.getElementById("posted-count");
+const analyticsModal = document.getElementById("analytics-modal");
+const analyticsCloseBtn = document.getElementById("analytics-close");
+const analyticsTitleEl = document.getElementById("analytics-title");
+const analyticsSummaryEl = document.getElementById("analytics-summary");
+const analyticsTableEl = document.getElementById("analytics-table");
+let activeAnalyticsId = "";
 
 function getToken() {
   return localStorage.getItem(TOKEN_KEY);
@@ -157,7 +176,7 @@ function renderMetrics(counts) {
   metricsEl.innerHTML = [
     metricCard("Users", counts.users ?? 0, `${counts.candidates ?? 0} candidates / ${counts.adminUsers ?? 0} admins`, "accent"),
     metricCard("Recruiters", counts.recruiters ?? 0, `${counts.verifiedRecruiters ?? 0} verified / ${counts.pendingRecruiters ?? 0} pending`, "accent-2"),
-    metricCard("Jobs", counts.jobRecords ?? 0, "Dataset-backed records", "accent-3"),
+    metricCard("Jobs", counts.postedJobs ?? 0, `${counts.postedEvents ?? 0} events / ${counts.postedQuizzes ?? 0} quizzes`, "accent-3"),
     metricCard("Pages", counts.pages ?? 0, "Live app screens", "neutral"),
     metricCard("Profiles", counts.publicProfiles ?? 0, "Public candidate pages", "neutral"),
   ].join("");
@@ -220,6 +239,7 @@ function renderContentStats(counts) {
     ["Verified recruiters", `${counts.verifiedRecruiters ?? 0}`],
     ["Candidate accounts", `${counts.candidates ?? 0}`],
     ["Stored analyses", `${counts.analyses ?? 0}`],
+    ["Published posts", `${counts.postedOpportunities ?? 0}`],
   ];
   contentStatsEl.innerHTML = stats
     .map(
@@ -233,6 +253,201 @@ function renderContentStats(counts) {
     .join("");
 }
 
+function splitList(value = "") {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function getInput(id) {
+  return document.getElementById(id);
+}
+
+function showPostForm(type = "job") {
+  const safeType = ["job", "event", "quiz"].includes(type) ? type : "job";
+  if (postTypeInput) postTypeInput.value = safeType;
+  if (postFormTitle) postFormTitle.textContent = safeType === "job" ? "Add Job" : safeType === "event" ? "Add Event / Contest" : "Add Quiz";
+  postForm?.classList.remove("hidden");
+  createOptionsEl?.classList.remove("hidden");
+  jobFields?.classList.toggle("hidden", safeType !== "job");
+  eventFields?.classList.toggle("hidden", safeType !== "event");
+  quizFields?.classList.toggle("hidden", !(safeType === "quiz" || safeType === "event"));
+  if ((safeType === "quiz" || safeType === "event") && questionListEl && !questionListEl.children.length) addQuestionRow();
+  postForm?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function addQuestionRow(data = {}) {
+  if (!questionListEl) return;
+  const idx = questionListEl.children.length + 1;
+  const row = document.createElement("article");
+  row.className = "question-row";
+  row.innerHTML = `
+    <div class="question-row-head"><strong>Question ${idx}</strong><button type="button" class="ghost remove-question-btn">Remove</button></div>
+    <label class="full">Question<textarea class="question-text" rows="2" placeholder="Write the question">${escapeHtml(data.question || "")}</textarea></label>
+    <label>Options<input class="question-options" type="text" placeholder="A, B, C, D" value="${escapeHtml((data.options || []).join(", "))}" /></label>
+    <label>Correct Answer<input class="question-answer" type="text" placeholder="Exact answer" value="${escapeHtml(data.answer || "")}" /></label>
+    <label>Points<input class="question-points" type="number" min="1" value="${escapeHtml(data.points || 1)}" /></label>
+    <label class="full">Description / Hint<textarea class="question-desc" rows="2" placeholder="Optional explanation">${escapeHtml(data.description || "")}</textarea></label>
+  `;
+  row.querySelector(".remove-question-btn")?.addEventListener("click", () => row.remove());
+  questionListEl.appendChild(row);
+}
+
+function collectQuestions() {
+  return Array.from(questionListEl?.querySelectorAll(".question-row") || [])
+    .map((row, idx) => ({
+      id: `q_${idx + 1}`,
+      question: row.querySelector(".question-text")?.value || "",
+      options: splitList(row.querySelector(".question-options")?.value || ""),
+      answer: row.querySelector(".question-answer")?.value || "",
+      points: Number(row.querySelector(".question-points")?.value || 1) || 1,
+      description: row.querySelector(".question-desc")?.value || "",
+    }))
+    .filter((item) => item.question.trim());
+}
+
+function collectAttachments() {
+  return Array.from(getInput("job-attachments")?.files || []).map((file) => ({
+    name: file.name,
+    type: file.type,
+    size: file.size,
+  }));
+}
+
+function buildPostPayload() {
+  const type = postTypeInput?.value || "job";
+  const payload = {
+    type,
+    title: getInput("post-title")?.value || "",
+    name: getInput("post-title")?.value || "",
+    organization: getInput("post-organization")?.value || "",
+    description: getInput("post-description")?.value || "",
+    location: getInput("post-location")?.value || "",
+    mode: getInput("post-mode")?.value || "Online",
+    deadline: getInput("post-deadline")?.value || "",
+    skills: splitList(getInput("post-skills")?.value || ""),
+  };
+  if (type === "job") {
+    payload.role = getInput("job-role")?.value || payload.title;
+    payload.employmentType = getInput("job-employment")?.value || "Full time";
+    payload.salary = getInput("job-salary")?.value || "";
+    payload.eligibility = getInput("job-eligibility")?.value || "";
+    payload.applyInstructions = getInput("job-instructions")?.value || "";
+    payload.attachments = collectAttachments();
+  }
+  if (type === "event") {
+    payload.category = getInput("event-category")?.value || "Contest";
+    payload.startAt = getInput("event-start")?.value || "";
+    payload.endAt = getInput("event-end")?.value || "";
+    payload.registrationLink = getInput("event-link")?.value || "";
+    payload.rules = getInput("event-rules")?.value || "";
+    payload.questions = collectQuestions();
+  }
+  if (type === "quiz") {
+    payload.durationMinutes = Number(getInput("quiz-duration")?.value || 30) || 30;
+    payload.instructions = getInput("quiz-instructions")?.value || "";
+    payload.questions = collectQuestions();
+  }
+  return payload;
+}
+
+function resetPostForm() {
+  postForm?.reset();
+  if (questionListEl) questionListEl.innerHTML = "";
+  showPostForm(postTypeInput?.value || "job");
+}
+
+function postCard(item) {
+  const typeLabel = item.type === "event" ? "Event / Contest" : item.type === "quiz" ? "Quiz" : "Job";
+  const metric = item.type === "quiz" ? `${item.submissionCount || 0} submissions` : `${item.applicationCount || 0} applications`;
+  return `
+    <article class="posted-card">
+      <div class="posted-card-head">
+        <div><span class="pill">${escapeHtml(typeLabel)}</span><h3>${escapeHtml(item.title || item.name)}</h3></div>
+        <span class="muted small">${escapeHtml(formatDate(item.createdAt))}</span>
+      </div>
+      <p>${escapeHtml(item.description || "No description.")}</p>
+      <div class="posted-meta">
+        <span>${escapeHtml(item.organization || "NextHire")}</span>
+        <span>${escapeHtml(item.location || "Remote")}</span>
+        <span>${escapeHtml(metric)}</span>
+      </div>
+      <div class="queue-actions">
+        <button class="ghost analytics-btn" type="button" data-id="${escapeHtml(item.id)}">View Analytics</button>
+      </div>
+    </article>
+  `;
+}
+
+function renderPosts(opportunities = []) {
+  if (!postedListEl) return;
+  postedListEl.innerHTML = opportunities.length
+    ? opportunities.map(postCard).join("")
+    : `<div class="empty-state"><strong>No posts yet</strong><span>Click + and publish a job, event, or quiz.</span></div>`;
+  if (postedCountEl) postedCountEl.textContent = `${opportunities.length} posts`;
+  postedListEl.querySelectorAll(".analytics-btn").forEach((button) => {
+    button.addEventListener("click", () => loadAnalytics(button.dataset.id));
+  });
+}
+
+async function loadAdminPosts() {
+  const data = await fetchJson("/api/admin/opportunities");
+  renderPosts(data.opportunities || []);
+  return data.opportunities || [];
+}
+
+function renderAnalyticsTable(applications = [], submissions = []) {
+  const rows = applications.length
+    ? applications.map((row) => `
+      <tr><td>${escapeHtml(row.name || "Candidate")}</td><td>${escapeHtml(row.email || "")}</td><td>${escapeHtml(row.phone || "")}</td><td>${escapeHtml(row.college || "")}</td><td>${escapeHtml(row.status || "applied")}</td><td>${escapeHtml(formatDate(row.appliedAt))}</td></tr>
+    `).join("")
+    : `<tr><td colspan="6" class="empty-cell">No applications yet.</td></tr>`;
+  const submissionRows = submissions.length
+    ? submissions.map((row) => `
+      <tr><td>${escapeHtml(row.name || "Candidate")}</td><td>${escapeHtml(row.email || "")}</td><td>${escapeHtml(`${row.score || 0}/${row.total || 0}`)}</td><td>${escapeHtml(`${row.percentage || 0}%`)}</td><td>${escapeHtml(formatDate(row.submittedAt))}</td></tr>
+    `).join("")
+    : `<tr><td colspan="5" class="empty-cell">No quiz submissions yet.</td></tr>`;
+  analyticsTableEl.innerHTML = `
+    <h4>Applicants</h4>
+    <table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>College</th><th>Status</th><th>Applied</th></tr></thead><tbody>${rows}</tbody></table>
+    <h4>Quiz / Contest Submissions</h4>
+    <table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Score</th><th>Percent</th><th>Submitted</th></tr></thead><tbody>${submissionRows}</tbody></table>
+  `;
+}
+
+async function loadAnalytics(id) {
+  if (!id) return;
+  activeAnalyticsId = id;
+  const data = await fetchJson(`/api/admin/opportunities/${encodeURIComponent(id)}/analytics`);
+  const opp = data.opportunity || {};
+  analyticsTitleEl.textContent = `${opp.title || "Post"} Analytics`;
+  analyticsSummaryEl.innerHTML = `
+    <div><strong>${(data.applications || []).length}</strong><span>Applications</span></div>
+    <div><strong>${(data.submissions || []).length}</strong><span>Submissions</span></div>
+    <div><strong>${escapeHtml(opp.creatorRole || "admin")}</strong><span>Posted by</span></div>
+  `;
+  renderAnalyticsTable(data.applications || [], data.submissions || []);
+  analyticsModal?.classList.remove("hidden");
+}
+
+async function downloadAnalytics(format) {
+  if (!activeAnalyticsId) return;
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/api/admin/opportunities/${encodeURIComponent(activeAnalyticsId)}/export?format=${encodeURIComponent(format)}`, {
+    headers: { Authorization: token ? `Bearer ${token}` : "" },
+  });
+  if (!res.ok) throw new Error("Download failed.");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `analytics.${format}`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 async function loadHealth() {
   if (!serviceHealthEl) return;
   serviceHealthEl.innerHTML = healthCard(frontendHealthCard());
@@ -279,6 +494,7 @@ async function loadOverview() {
     renderUsers(data.recentUsers || []);
     renderPages(data.pages || []);
     renderContentStats(counts);
+    await loadAdminPosts();
     await loadHealth();
     setStatus(`Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`, "ok");
   } catch (err) {
@@ -299,6 +515,53 @@ function logout() {
   localStorage.removeItem(ROLE_KEY);
   window.location.href = "login.html";
 }
+
+addToggleBtn?.addEventListener("click", () => {
+  createOptionsEl?.classList.toggle("hidden");
+  const isOpen = !createOptionsEl?.classList.contains("hidden");
+  addToggleBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  addToggleBtn.textContent = isOpen ? "x" : "+";
+  if (isOpen) {
+    createOptionsEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+});
+
+createOptionsEl?.querySelectorAll(".create-option").forEach((button) => {
+  button.addEventListener("click", () => showPostForm(button.dataset.type || "job"));
+});
+
+addQuestionBtn?.addEventListener("click", () => addQuestionRow());
+postResetBtn?.addEventListener("click", resetPostForm);
+analyticsCloseBtn?.addEventListener("click", () => analyticsModal?.classList.add("hidden"));
+analyticsModal?.addEventListener("click", (event) => {
+  if (event.target === analyticsModal) analyticsModal.classList.add("hidden");
+});
+
+document.querySelectorAll(".export-btn").forEach((button) => {
+  button.addEventListener("click", async () => {
+    try {
+      await downloadAnalytics(button.dataset.format || "csv");
+    } catch (err) {
+      setStatus(err.message || "Could not download analytics.", "err");
+    }
+  });
+});
+
+postForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    setStatus("Publishing post...", "warn");
+    await fetchJson("/api/admin/opportunities", {
+      method: "POST",
+      body: JSON.stringify(buildPostPayload()),
+    });
+    resetPostForm();
+    await loadOverview();
+    setStatus("Post published and visible to candidates.", "ok");
+  } catch (err) {
+    setStatus(err.message || "Could not publish post.", "err");
+  }
+});
 
 refreshBtn?.addEventListener("click", loadOverview);
 logoutBtn?.addEventListener("click", logout);
