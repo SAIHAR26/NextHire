@@ -962,6 +962,10 @@ button {
   min-width: 0;
 }
 
+.recruiter-main .kpi .value {
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 900px) {
   .site-header {
     flex-direction: column;

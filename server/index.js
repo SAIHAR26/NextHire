@@ -293,10 +293,12 @@ async function checkHttpService(name, url, options = {}) {
 function normalizeStoredUser(user = {}) {
   const role = String(user?.role || "candidate").toLowerCase();
   const verificationStatus = String(user?.verificationStatus || "").toLowerCase() || (role === "recruiter" ? "pending" : "verified");
+  const companyName = String(user?.companyName || user?.company || "").trim();
   return {
     ...user,
     role,
     verificationStatus,
+    companyName,
   };
 }
 
@@ -1394,6 +1396,7 @@ app.post("/api/auth/signup", async (req, res) => {
   const { name, password, verifyToken } = req.body || {};
   const roleRaw = String(req.body?.role || "candidate").toLowerCase();
   const role = roleRaw === "recruiter" ? "recruiter" : "candidate";
+  const companyName = role === "recruiter" ? String(req.body?.companyName || "").trim() : "";
   const email = normalizeEmail(req.body?.email || "");
   if (!name || !email || !password) {
     return res.status(400).json({ error: "Name, email, password required." });
@@ -1426,6 +1429,7 @@ app.post("/api/auth/signup", async (req, res) => {
       id: `mem_${Date.now()}`,
       name,
       role,
+      companyName,
       email,
       passwordHash,
       createdAt: new Date(),
@@ -1442,6 +1446,7 @@ app.post("/api/auth/signup", async (req, res) => {
     await db.collection("users").insertOne({
       name,
       role,
+      companyName,
       email,
       passwordHash,
       createdAt: new Date(),
@@ -1461,6 +1466,7 @@ app.post("/api/auth/signup", async (req, res) => {
       id: `mem_${Date.now()}`,
       name,
       role,
+      companyName,
       email,
       passwordHash,
       createdAt: new Date(),
@@ -1485,13 +1491,10 @@ app.post("/api/auth/login", async (req, res) => {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: "Invalid credentials." });
     const normalizedUser = normalizeStoredUser(user);
-    if (normalizedUser.role === "recruiter" && normalizedUser.verificationStatus !== "verified") {
-      return res.status(403).json({ error: "Recruiter account pending admin verification." });
-    }
     const token = jwt.sign({ id: user.id, email, role: normalizedUser.role }, JWT_SECRET, {
       expiresIn: "7d",
     });
-    return res.json({ token, name: user.name, role: normalizedUser.role || "candidate", verificationStatus: normalizedUser.verificationStatus, storage: "memory" });
+    return res.json({ token, name: user.name, email, role: normalizedUser.role || "candidate", companyName: normalizedUser.companyName, verificationStatus: normalizedUser.verificationStatus, storage: "memory" });
   }
   try {
     const user = await db.collection("users").findOne({ email });
@@ -1499,13 +1502,10 @@ app.post("/api/auth/login", async (req, res) => {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: "Invalid credentials." });
     const normalizedUser = normalizeStoredUser(user);
-    if (normalizedUser.role === "recruiter" && normalizedUser.verificationStatus !== "verified") {
-      return res.status(403).json({ error: "Recruiter account pending admin verification." });
-    }
     const token = jwt.sign({ id: user._id.toString(), email, role: normalizedUser.role }, JWT_SECRET, {
       expiresIn: "7d",
     });
-    return res.json({ token, name: user.name, role: normalizedUser.role || "candidate", verificationStatus: normalizedUser.verificationStatus });
+    return res.json({ token, name: user.name, email, role: normalizedUser.role || "candidate", companyName: normalizedUser.companyName, verificationStatus: normalizedUser.verificationStatus });
   } catch {
     dbClient = null;
     dbFailedAt = Date.now();
@@ -1514,13 +1514,10 @@ app.post("/api/auth/login", async (req, res) => {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: "Invalid credentials." });
     const normalizedUser = normalizeStoredUser(user);
-    if (normalizedUser.role === "recruiter" && normalizedUser.verificationStatus !== "verified") {
-      return res.status(403).json({ error: "Recruiter account pending admin verification." });
-    }
     const token = jwt.sign({ id: user.id, email, role: normalizedUser.role }, JWT_SECRET, {
       expiresIn: "7d",
     });
-    return res.json({ token, name: user.name, role: normalizedUser.role || "candidate", verificationStatus: normalizedUser.verificationStatus, storage: "memory" });
+    return res.json({ token, name: user.name, email, role: normalizedUser.role || "candidate", companyName: normalizedUser.companyName, verificationStatus: normalizedUser.verificationStatus, storage: "memory" });
   }
 });
 
@@ -1534,6 +1531,7 @@ app.get("/api/auth/me", authMiddleware, async (req, res) => {
       name: user.name || "",
       email: user.email || "",
       role: user.role || "candidate",
+      companyName: user.companyName || "",
       verificationStatus: user.verificationStatus || (user.role === "recruiter" ? "pending" : "verified"),
       createdAt: user.createdAt || null,
     },

@@ -2,6 +2,9 @@ const API_BASE = "http://localhost:4000";
 const TOKEN_KEY = "nexthire_token";
 const NAME_KEY = "nexthire_name";
 const ROLE_KEY = "nexthire_role";
+const EMAIL_KEY = "nexthire_email";
+const COMPANY_KEY = "nexthire_company_name";
+const VERIFICATION_STATUS_KEY = "nexthire_verification_status";
 const RECRUITER_DASHBOARD_PATH = "recruiter-dashboard.html";
 
 const authStatusEl = document.getElementById("auth-status");
@@ -10,6 +13,8 @@ const signupForm = document.getElementById("signup-form");
 
 const signupNameInput = document.getElementById("signup-name");
 const signupRoleInput = document.getElementById("signup-role");
+const signupCompanyRow = document.getElementById("signup-company-row");
+const signupCompanyInput = document.getElementById("signup-company");
 const signupEmailInput = document.getElementById("signup-email");
 const signupPasswordInput = document.getElementById("signup-password");
 const signupOtpInput = document.getElementById("signup-otp");
@@ -43,6 +48,16 @@ function setRole(role) {
   const safeRole = String(role || "").trim().toLowerCase();
   if (safeRole) localStorage.setItem(ROLE_KEY, safeRole);
   else localStorage.removeItem(ROLE_KEY);
+}
+
+function setUserDetails({ email = "", companyName = "", verificationStatus = "" } = {}) {
+  const safeEmail = normalizeEmail(email);
+  const safeCompanyName = String(companyName || "").trim();
+  const safeStatus = String(verificationStatus || "").trim().toLowerCase();
+  if (safeEmail) localStorage.setItem(EMAIL_KEY, safeEmail);
+  if (safeCompanyName) localStorage.setItem(COMPANY_KEY, safeCompanyName);
+  else localStorage.removeItem(COMPANY_KEY);
+  if (safeStatus) localStorage.setItem(VERIFICATION_STATUS_KEY, safeStatus);
 }
 
 function getRole() {
@@ -151,6 +166,15 @@ async function pingBackend() {
 const loginIntent = applyLoginIntent();
 pingBackend();
 
+function syncSignupRoleFields() {
+  const isRecruiter = String(signupRoleInput?.value || "").toLowerCase() === "recruiter";
+  signupCompanyRow?.classList.toggle("hidden", !isRecruiter);
+  if (signupCompanyInput) signupCompanyInput.required = isRecruiter;
+}
+
+signupRoleInput?.addEventListener("change", syncSignupRoleFields);
+syncSignupRoleFields();
+
 if (loginForm) {
   loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -174,6 +198,11 @@ if (loginForm) {
       const name = (data.name || "").trim() || guessNameFromEmail(payload.email) || "";
       setName(name);
       setRole(data.role || "candidate");
+      setUserDetails({
+        email: payload.email,
+        companyName: data.companyName || "",
+        verificationStatus: data.verificationStatus || "",
+      });
       setAuthStatus("ok", "Logged in. Redirecting...");
       setTimeout(getRedirectForAuthRole(data.role, loginIntent), 400);
     } catch (err) {
@@ -296,6 +325,7 @@ if (signupForm) {
       const payload = {
         name: signupNameInput?.value.trim() || "",
         role: String(signupRoleInput?.value || "candidate").toLowerCase(),
+        companyName: signupCompanyInput?.value.trim() || "",
         email,
         password: signupPasswordInput?.value || "",
         verifyToken: signupVerifyToken,
@@ -325,6 +355,11 @@ if (signupForm) {
           setToken(data.token);
           setName((data.name || "").trim() || payload.name || guessNameFromEmail(payload.email));
           setRole("recruiter");
+          setUserDetails({
+            email: payload.email,
+            companyName: data.companyName || payload.companyName,
+            verificationStatus: data.verificationStatus || "pending",
+          });
           resetVerificationState();
           setTimeout(redirectRecruiterDashboard, 400);
           return;
