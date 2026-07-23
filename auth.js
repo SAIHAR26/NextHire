@@ -4,6 +4,12 @@ const NAME_KEY = "nexthire_name";
 const ROLE_KEY = "nexthire_role";
 const EMAIL_KEY = "nexthire_email";
 const COMPANY_KEY = "nexthire_company_name";
+const COMPANY_WEBSITE_KEY = "nexthire_company_website";
+const COMPANY_INDUSTRY_KEY = "nexthire_company_industry";
+const COMPANY_SIZE_KEY = "nexthire_company_size";
+const COMPANY_LOCATION_KEY = "nexthire_company_location";
+const COMPANY_DESCRIPTION_KEY = "nexthire_company_description";
+const COMPANY_VERIFICATION_STATUS_KEY = "nexthire_company_verification_status";
 const VERIFICATION_STATUS_KEY = "nexthire_verification_status";
 const RECRUITER_DASHBOARD_PATH = "recruiter-dashboard.html";
 
@@ -15,6 +21,16 @@ const signupNameInput = document.getElementById("signup-name");
 const signupRoleInput = document.getElementById("signup-role");
 const signupCompanyRow = document.getElementById("signup-company-row");
 const signupCompanyInput = document.getElementById("signup-company");
+const signupCompanyWebsiteRow = document.getElementById("signup-company-website-row");
+const signupCompanyWebsiteInput = document.getElementById("signup-company-website");
+const signupCompanyIndustryRow = document.getElementById("signup-company-industry-row");
+const signupCompanyIndustryInput = document.getElementById("signup-company-industry");
+const signupCompanySizeRow = document.getElementById("signup-company-size-row");
+const signupCompanySizeInput = document.getElementById("signup-company-size");
+const signupCompanyLocationRow = document.getElementById("signup-company-location-row");
+const signupCompanyLocationInput = document.getElementById("signup-company-location");
+const signupCompanyDescriptionRow = document.getElementById("signup-company-description-row");
+const signupCompanyDescriptionInput = document.getElementById("signup-company-description");
 const signupEmailInput = document.getElementById("signup-email");
 const signupPasswordInput = document.getElementById("signup-password");
 const signupOtpInput = document.getElementById("signup-otp");
@@ -50,13 +66,33 @@ function setRole(role) {
   else localStorage.removeItem(ROLE_KEY);
 }
 
-function setUserDetails({ email = "", companyName = "", verificationStatus = "" } = {}) {
+function setOptionalStorage(key, value = "") {
+  const safeValue = String(value || "").trim();
+  if (safeValue) localStorage.setItem(key, safeValue);
+  else localStorage.removeItem(key);
+}
+
+function setUserDetails({
+  email = "",
+  companyName = "",
+  companyWebsite = "",
+  companyIndustry = "",
+  companySize = "",
+  companyLocation = "",
+  companyDescription = "",
+  companyVerificationStatus = "",
+  verificationStatus = "",
+} = {}) {
   const safeEmail = normalizeEmail(email);
-  const safeCompanyName = String(companyName || "").trim();
   const safeStatus = String(verificationStatus || "").trim().toLowerCase();
   if (safeEmail) localStorage.setItem(EMAIL_KEY, safeEmail);
-  if (safeCompanyName) localStorage.setItem(COMPANY_KEY, safeCompanyName);
-  else localStorage.removeItem(COMPANY_KEY);
+  setOptionalStorage(COMPANY_KEY, companyName);
+  setOptionalStorage(COMPANY_WEBSITE_KEY, companyWebsite);
+  setOptionalStorage(COMPANY_INDUSTRY_KEY, companyIndustry);
+  setOptionalStorage(COMPANY_SIZE_KEY, companySize);
+  setOptionalStorage(COMPANY_LOCATION_KEY, companyLocation);
+  setOptionalStorage(COMPANY_DESCRIPTION_KEY, companyDescription);
+  setOptionalStorage(COMPANY_VERIFICATION_STATUS_KEY, companyVerificationStatus);
   if (safeStatus) localStorage.setItem(VERIFICATION_STATUS_KEY, safeStatus);
 }
 
@@ -93,6 +129,13 @@ function getLoginIntent() {
     role: String(params.get("role") || "").trim().toLowerCase(),
     redirect: String(params.get("redirect") || "").trim(),
     email: normalizeEmail(params.get("email") || ""),
+    companyName: String(params.get("companyName") || "").trim(),
+    companyWebsite: String(params.get("companyWebsite") || "").trim(),
+    companyIndustry: String(params.get("companyIndustry") || "").trim(),
+    companySize: String(params.get("companySize") || "").trim(),
+    companyLocation: String(params.get("companyLocation") || "").trim(),
+    companyDescription: String(params.get("companyDescription") || "").trim(),
+    companyVerificationStatus: String(params.get("companyVerificationStatus") || "").trim(),
   };
 }
 
@@ -168,8 +211,23 @@ pingBackend();
 
 function syncSignupRoleFields() {
   const isRecruiter = String(signupRoleInput?.value || "").toLowerCase() === "recruiter";
-  signupCompanyRow?.classList.toggle("hidden", !isRecruiter);
-  if (signupCompanyInput) signupCompanyInput.required = isRecruiter;
+  [
+    signupCompanyRow,
+    signupCompanyWebsiteRow,
+    signupCompanyIndustryRow,
+    signupCompanySizeRow,
+    signupCompanyLocationRow,
+    signupCompanyDescriptionRow,
+  ].forEach((row) => row?.classList.toggle("hidden", !isRecruiter));
+  [
+    signupCompanyInput,
+    signupCompanyWebsiteInput,
+    signupCompanyIndustryInput,
+    signupCompanySizeInput,
+    signupCompanyLocationInput,
+  ].forEach((input) => {
+    if (input) input.required = isRecruiter;
+  });
 }
 
 signupRoleInput?.addEventListener("change", syncSignupRoleFields);
@@ -200,7 +258,14 @@ if (loginForm) {
       setRole(data.role || "candidate");
       setUserDetails({
         email: payload.email,
-        companyName: data.companyName || "",
+        companyName: data.companyName || loginIntent.companyName,
+        companyWebsite: data.companyWebsite || loginIntent.companyWebsite,
+        companyIndustry: data.companyIndustry || loginIntent.companyIndustry,
+        companySize: data.companySize || loginIntent.companySize,
+        companyLocation: data.companyLocation || loginIntent.companyLocation,
+        companyDescription: data.companyDescription || loginIntent.companyDescription,
+        companyVerificationStatus:
+          data.companyVerificationStatus || loginIntent.companyVerificationStatus,
         verificationStatus: data.verificationStatus || "",
       });
       setAuthStatus("ok", "Logged in. Redirecting...");
@@ -326,6 +391,11 @@ if (signupForm) {
         name: signupNameInput?.value.trim() || "",
         role: String(signupRoleInput?.value || "candidate").toLowerCase(),
         companyName: signupCompanyInput?.value.trim() || "",
+        companyWebsite: signupCompanyWebsiteInput?.value.trim() || "",
+        companyIndustry: signupCompanyIndustryInput?.value.trim() || "",
+        companySize: signupCompanySizeInput?.value.trim() || "",
+        companyLocation: signupCompanyLocationInput?.value.trim() || "",
+        companyDescription: signupCompanyDescriptionInput?.value.trim() || "",
         email,
         password: signupPasswordInput?.value || "",
         verifyToken: signupVerifyToken,
@@ -358,6 +428,12 @@ if (signupForm) {
           setUserDetails({
             email: payload.email,
             companyName: data.companyName || payload.companyName,
+            companyWebsite: data.companyWebsite || payload.companyWebsite,
+            companyIndustry: data.companyIndustry || payload.companyIndustry,
+            companySize: data.companySize || payload.companySize,
+            companyLocation: data.companyLocation || payload.companyLocation,
+            companyDescription: data.companyDescription || payload.companyDescription,
+            companyVerificationStatus: data.companyVerificationStatus || "submitted",
             verificationStatus: data.verificationStatus || "pending",
           });
           resetVerificationState();

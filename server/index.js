@@ -294,11 +294,71 @@ function normalizeStoredUser(user = {}) {
   const role = String(user?.role || "candidate").toLowerCase();
   const verificationStatus = String(user?.verificationStatus || "").toLowerCase() || (role === "recruiter" ? "pending" : "verified");
   const companyName = String(user?.companyName || user?.company || "").trim();
+  const companyWebsite = String(user?.companyWebsite || "").trim();
+  const companyIndustry = String(user?.companyIndustry || "").trim();
+  const companySize = String(user?.companySize || "").trim();
+  const companyLocation = String(user?.companyLocation || "").trim();
+  const companyDescription = String(user?.companyDescription || "").trim();
+  const companyVerificationStatus =
+    String(user?.companyVerificationStatus || "").toLowerCase() ||
+    (role === "recruiter" && companyName ? "submitted" : "");
   return {
     ...user,
     role,
     verificationStatus,
     companyName,
+    companyWebsite,
+    companyIndustry,
+    companySize,
+    companyLocation,
+    companyDescription,
+    companyVerificationStatus,
+  };
+}
+
+function readCompanyDetails(payload = {}, role = "candidate") {
+  if (role !== "recruiter") {
+    return {
+      companyName: "",
+      companyWebsite: "",
+      companyIndustry: "",
+      companySize: "",
+      companyLocation: "",
+      companyDescription: "",
+      companyVerificationStatus: "",
+    };
+  }
+  const companyName = String(payload.companyName || payload.company || "").trim();
+  const companyWebsite = String(payload.companyWebsite || "").trim();
+  const companyIndustry = String(payload.companyIndustry || "").trim();
+  const companySize = String(payload.companySize || "").trim();
+  const companyLocation = String(payload.companyLocation || "").trim();
+  const companyDescription = String(payload.companyDescription || "").trim();
+  return {
+    companyName,
+    companyWebsite,
+    companyIndustry,
+    companySize,
+    companyLocation,
+    companyDescription,
+    companyVerificationStatus: companyName && companyWebsite ? "submitted" : "pending",
+  };
+}
+
+function buildAuthUserResponse(user = {}, email = "") {
+  const normalizedUser = normalizeStoredUser(user);
+  return {
+    name: normalizedUser.name || "",
+    email: normalizedUser.email || email || "",
+    role: normalizedUser.role || "candidate",
+    companyName: normalizedUser.companyName || "",
+    companyWebsite: normalizedUser.companyWebsite || "",
+    companyIndustry: normalizedUser.companyIndustry || "",
+    companySize: normalizedUser.companySize || "",
+    companyLocation: normalizedUser.companyLocation || "",
+    companyDescription: normalizedUser.companyDescription || "",
+    companyVerificationStatus: normalizedUser.companyVerificationStatus || "",
+    verificationStatus: normalizedUser.verificationStatus,
   };
 }
 
@@ -1396,7 +1456,7 @@ app.post("/api/auth/signup", async (req, res) => {
   const { name, password, verifyToken } = req.body || {};
   const roleRaw = String(req.body?.role || "candidate").toLowerCase();
   const role = roleRaw === "recruiter" ? "recruiter" : "candidate";
-  const companyName = role === "recruiter" ? String(req.body?.companyName || "").trim() : "";
+  const companyDetails = readCompanyDetails(req.body || {}, role);
   const email = normalizeEmail(req.body?.email || "");
   if (!name || !email || !password) {
     return res.status(400).json({ error: "Name, email, password required." });
@@ -1429,7 +1489,7 @@ app.post("/api/auth/signup", async (req, res) => {
       id: `mem_${Date.now()}`,
       name,
       role,
-      companyName,
+      ...companyDetails,
       email,
       passwordHash,
       createdAt: new Date(),
@@ -1446,7 +1506,7 @@ app.post("/api/auth/signup", async (req, res) => {
     await db.collection("users").insertOne({
       name,
       role,
-      companyName,
+      ...companyDetails,
       email,
       passwordHash,
       createdAt: new Date(),
@@ -1466,7 +1526,7 @@ app.post("/api/auth/signup", async (req, res) => {
       id: `mem_${Date.now()}`,
       name,
       role,
-      companyName,
+      ...companyDetails,
       email,
       passwordHash,
       createdAt: new Date(),
@@ -1494,7 +1554,7 @@ app.post("/api/auth/login", async (req, res) => {
     const token = jwt.sign({ id: user.id, email, role: normalizedUser.role }, JWT_SECRET, {
       expiresIn: "7d",
     });
-    return res.json({ token, name: user.name, email, role: normalizedUser.role || "candidate", companyName: normalizedUser.companyName, verificationStatus: normalizedUser.verificationStatus, storage: "memory" });
+    return res.json({ token, ...buildAuthUserResponse(user, email), storage: "memory" });
   }
   try {
     const user = await db.collection("users").findOne({ email });
@@ -1505,7 +1565,7 @@ app.post("/api/auth/login", async (req, res) => {
     const token = jwt.sign({ id: user._id.toString(), email, role: normalizedUser.role }, JWT_SECRET, {
       expiresIn: "7d",
     });
-    return res.json({ token, name: user.name, email, role: normalizedUser.role || "candidate", companyName: normalizedUser.companyName, verificationStatus: normalizedUser.verificationStatus });
+    return res.json({ token, ...buildAuthUserResponse(user, email) });
   } catch {
     dbClient = null;
     dbFailedAt = Date.now();
@@ -1517,7 +1577,7 @@ app.post("/api/auth/login", async (req, res) => {
     const token = jwt.sign({ id: user.id, email, role: normalizedUser.role }, JWT_SECRET, {
       expiresIn: "7d",
     });
-    return res.json({ token, name: user.name, email, role: normalizedUser.role || "candidate", companyName: normalizedUser.companyName, verificationStatus: normalizedUser.verificationStatus, storage: "memory" });
+    return res.json({ token, ...buildAuthUserResponse(user, email), storage: "memory" });
   }
 });
 
@@ -1532,10 +1592,41 @@ app.get("/api/auth/me", authMiddleware, async (req, res) => {
       email: user.email || "",
       role: user.role || "candidate",
       companyName: user.companyName || "",
+      companyWebsite: user.companyWebsite || "",
+      companyIndustry: user.companyIndustry || "",
+      companySize: user.companySize || "",
+      companyLocation: user.companyLocation || "",
+      companyDescription: user.companyDescription || "",
+      companyVerificationStatus: user.companyVerificationStatus || "",
       verificationStatus: user.verificationStatus || (user.role === "recruiter" ? "pending" : "verified"),
       createdAt: user.createdAt || null,
     },
   });
+});
+
+app.put("/api/recruiter/company-profile", authMiddleware, async (req, res) => {
+  if (String(req.user?.role || "").toLowerCase() !== "recruiter") {
+    return res.status(403).json({ error: "Recruiter access required." });
+  }
+  const companyDetails = readCompanyDetails(req.body || {}, "recruiter");
+  const updates = {
+    ...companyDetails,
+    updatedAt: new Date(),
+  };
+  const db = await getDb();
+  if (db && ObjectId.isValid(String(req.user?.id || ""))) {
+    await db.collection("users").updateOne(
+      { _id: new ObjectId(String(req.user.id)) },
+      { $set: updates }
+    );
+    const user = await db.collection("users").findOne({ _id: new ObjectId(String(req.user.id)) });
+    return res.json({ ok: true, user: buildAuthUserResponse(user || {}, req.user?.email || "") });
+  }
+
+  const mem = memoryUsers.find((user) => String(user.id || user._id || "") === String(req.user?.id || ""));
+  if (!mem) return res.status(404).json({ error: "User not found." });
+  Object.assign(mem, updates);
+  return res.json({ ok: true, user: buildAuthUserResponse(mem, req.user?.email || ""), storage: "memory" });
 });
 
 async function requireAdmin(req, res, next) {
