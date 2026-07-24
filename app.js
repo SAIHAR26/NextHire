@@ -3121,6 +3121,7 @@ form.addEventListener("submit", async (event) => {
       usernames: {
         leetcode: state.inputs.leetcode,
         codechef: state.inputs.codechef,
+        codechefSolved: state.inputs.codechefSolved,
         github: state.inputs.github,
         hackerrank: state.inputs.hackerrank,
       },

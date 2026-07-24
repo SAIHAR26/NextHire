@@ -59,6 +59,7 @@ const EMAIL_VERIFICATION_COOLDOWN_MS = Math.max(
 );
 const EMAIL_VERIFY_JWT_SECRET = process.env.EMAIL_VERIFY_JWT_SECRET || JWT_SECRET;
 const EMAIL_VERIFY_MAX_ATTEMPTS = 8;
+const ANALYZE_PLATFORM_DEADLINE_MS = 7000;
 const EMAIL_VERIFICATION_DEV_FALLBACK =
   String(process.env.EMAIL_VERIFICATION_DEV_FALLBACK || "").trim() === "1";
 const ADMIN_EMAIL = normalizeEmail(process.env.ADMIN_EMAIL || "admin@nexthire.local");
@@ -118,6 +119,31 @@ function deleteMemoryVerification(email = "") {
   const safeEmail = normalizeEmail(email);
   const idx = memoryEmailVerifications.findIndex((entry) => entry.email === safeEmail);
   if (idx >= 0) memoryEmailVerifications.splice(idx, 1);
+}
+
+function parsePositiveInt(value) {
+  const num = parseInt(String(value ?? "").replace(/,/g, "").trim(), 10);
+  return Number.isFinite(num) && num > 0 ? num : 0;
+}
+
+async function withDeadline(label, promise, fallback, ms = ANALYZE_PLATFORM_DEADLINE_MS) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} request timed out`)), ms);
+      }),
+    ]);
+  } catch (err) {
+    const message = err?.message ? String(err.message) : `${label} unavailable`;
+    return {
+      ...fallback,
+      warning: message,
+    };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 async function getMailTransport() {
@@ -3054,11 +3080,43 @@ app.get("/api/hackathons", authMiddleware, async (req, res) => {
 app.post("/api/analyze", authMiddleware, async (req, res) => {
   const { usernames = {}, role = "", jobSkills = [] } = req.body || {};
   try {
+    const manualCodeChefSolved = parsePositiveInt(
+      usernames.codechefSolved ?? req.body?.codechefSolved
+    );
+    const leetcodeFallback = {
+      total: 0,
+      easy: 0,
+      medium: 0,
+      hard: 0,
+      rating: 0,
+      rank: "-",
+      contestsParticipated: 0,
+    };
+    const codechefFallback = {
+      stars: 0,
+      rank: "-",
+      solved: manualCodeChefSolved,
+      contestsParticipated: 0,
+      ...(manualCodeChefSolved ? { manualSolved: true } : {}),
+    };
+    const githubFallback = {
+      repos: 0,
+      stars: 0,
+      languages: [],
+      readmeQuality: "Unknown",
+    };
+    const hackerrankFallback = {
+      badges: 0,
+      certs: 0,
+      badgeDetails: [],
+      certDetails: [],
+    };
+
     const results = await Promise.allSettled([
-      fetchLeetCode(usernames.leetcode),
-      fetchCodeChef(usernames.codechef),
-      fetchGitHub(usernames.github),
-      fetchHackerRank(usernames.hackerrank),
+      withDeadline("LeetCode", fetchLeetCode(usernames.leetcode), leetcodeFallback),
+      withDeadline("CodeChef", fetchCodeChef(usernames.codechef), codechefFallback),
+      withDeadline("GitHub", fetchGitHub(usernames.github), githubFallback),
+      withDeadline("HackerRank", fetchHackerRank(usernames.hackerrank), hackerrankFallback),
     ]);
     const warnings = [];
     const unwrap = (result, fallback, label) => {
@@ -3069,34 +3127,24 @@ app.post("/api/analyze", authMiddleware, async (req, res) => {
       warnings.push(`${label}: ${reasonText}.`);
       return fallback;
     };
-    const leetcode = unwrap(
-      results[0],
-      {
-        total: 0,
-        easy: 0,
-        medium: 0,
-        hard: 0,
-        rating: 0,
-        rank: "-",
-        contestsParticipated: 0,
-      },
-      "LeetCode"
-    );
-    const codechef = unwrap(
-      results[1],
-      { stars: 0, rank: "-", solved: 0, contestsParticipated: 0 },
-      "CodeChef"
-    );
-    const github = unwrap(
-      results[2],
-      { repos: 0, stars: 0, languages: [], readmeQuality: "Unknown" },
-      "GitHub"
-    );
-    const hackerrank = unwrap(
-      results[3],
-      { badges: 0, certs: 0 },
-      "HackerRank"
-    );
+    const leetcode = unwrap(results[0], leetcodeFallback, "LeetCode");
+    let codechef = unwrap(results[1], codechefFallback, "CodeChef");
+    const github = unwrap(results[2], githubFallback, "GitHub");
+    const hackerrank = unwrap(results[3], hackerrankFallback, "HackerRank");
+
+    if (manualCodeChefSolved > 0) {
+      const liveSolved = Number(codechef.solved) || 0;
+      if (liveSolved <= 0 || codechef.warning) {
+        codechef = {
+          ...codechef,
+          solved: manualCodeChefSolved,
+          manualSolved: true,
+          warning: codechef.warning
+            ? `${codechef.warning}; using manual CodeChef solved count`
+            : "Using manual CodeChef solved count",
+        };
+      }
+    }
     [leetcode, codechef, github, hackerrank].forEach((item) => {
       if (item && item.warning) warnings.push(`${item.warning}.`);
     });
