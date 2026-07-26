@@ -4,6 +4,7 @@ const NAME_KEY = "nexthire_name";
 const ROLE_KEY = "nexthire_role";
 const EMAIL_KEY = "nexthire_email";
 const COMPANY_KEY = "nexthire_company_name";
+const COMPANY_PHONE_KEY = "nexthire_company_phone";
 const COMPANY_WEBSITE_KEY = "nexthire_company_website";
 const COMPANY_INDUSTRY_KEY = "nexthire_company_industry";
 const COMPANY_SIZE_KEY = "nexthire_company_size";
@@ -21,6 +22,8 @@ const signupNameInput = document.getElementById("signup-name");
 const signupRoleInput = document.getElementById("signup-role");
 const signupCompanyRow = document.getElementById("signup-company-row");
 const signupCompanyInput = document.getElementById("signup-company");
+const signupCompanyPhoneRow = document.getElementById("signup-company-phone-row");
+const signupCompanyPhoneInput = document.getElementById("signup-company-phone");
 const signupCompanyWebsiteRow = document.getElementById("signup-company-website-row");
 const signupCompanyWebsiteInput = document.getElementById("signup-company-website");
 const signupCompanyIndustryRow = document.getElementById("signup-company-industry-row");
@@ -75,6 +78,7 @@ function setOptionalStorage(key, value = "") {
 function setUserDetails({
   email = "",
   companyName = "",
+  companyPhone = "",
   companyWebsite = "",
   companyIndustry = "",
   companySize = "",
@@ -87,6 +91,7 @@ function setUserDetails({
   const safeStatus = String(verificationStatus || "").trim().toLowerCase();
   if (safeEmail) localStorage.setItem(EMAIL_KEY, safeEmail);
   setOptionalStorage(COMPANY_KEY, companyName);
+  setOptionalStorage(COMPANY_PHONE_KEY, companyPhone);
   setOptionalStorage(COMPANY_WEBSITE_KEY, companyWebsite);
   setOptionalStorage(COMPANY_INDUSTRY_KEY, companyIndustry);
   setOptionalStorage(COMPANY_SIZE_KEY, companySize);
@@ -130,6 +135,7 @@ function getLoginIntent() {
     redirect: String(params.get("redirect") || "").trim(),
     email: normalizeEmail(params.get("email") || ""),
     companyName: String(params.get("companyName") || "").trim(),
+    companyPhone: String(params.get("companyPhone") || "").trim(),
     companyWebsite: String(params.get("companyWebsite") || "").trim(),
     companyIndustry: String(params.get("companyIndustry") || "").trim(),
     companySize: String(params.get("companySize") || "").trim(),
@@ -213,6 +219,7 @@ function syncSignupRoleFields() {
   const isRecruiter = String(signupRoleInput?.value || "").toLowerCase() === "recruiter";
   [
     signupCompanyRow,
+    signupCompanyPhoneRow,
     signupCompanyWebsiteRow,
     signupCompanyIndustryRow,
     signupCompanySizeRow,
@@ -221,6 +228,7 @@ function syncSignupRoleFields() {
   ].forEach((row) => row?.classList.toggle("hidden", !isRecruiter));
   [
     signupCompanyInput,
+    signupCompanyPhoneInput,
     signupCompanyWebsiteInput,
     signupCompanyIndustryInput,
     signupCompanySizeInput,
@@ -259,6 +267,7 @@ if (loginForm) {
       setUserDetails({
         email: payload.email,
         companyName: data.companyName || loginIntent.companyName,
+        companyPhone: data.companyPhone || loginIntent.companyPhone,
         companyWebsite: data.companyWebsite || loginIntent.companyWebsite,
         companyIndustry: data.companyIndustry || loginIntent.companyIndustry,
         companySize: data.companySize || loginIntent.companySize,
@@ -391,6 +400,7 @@ if (signupForm) {
         name: signupNameInput?.value.trim() || "",
         role: String(signupRoleInput?.value || "candidate").toLowerCase(),
         companyName: signupCompanyInput?.value.trim() || "",
+        companyPhone: signupCompanyPhoneInput?.value.trim() || "",
         companyWebsite: signupCompanyWebsiteInput?.value.trim() || "",
         companyIndustry: signupCompanyIndustryInput?.value.trim() || "",
         companySize: signupCompanySizeInput?.value.trim() || "",
@@ -428,6 +438,7 @@ if (signupForm) {
           setUserDetails({
             email: payload.email,
             companyName: data.companyName || payload.companyName,
+            companyPhone: data.companyPhone || payload.companyPhone,
             companyWebsite: data.companyWebsite || payload.companyWebsite,
             companyIndustry: data.companyIndustry || payload.companyIndustry,
             companySize: data.companySize || payload.companySize,

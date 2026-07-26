@@ -325,6 +325,7 @@ function normalizeStoredUser(user = {}) {
   const role = String(user?.role || "candidate").toLowerCase();
   const verificationStatus = String(user?.verificationStatus || "").toLowerCase() || (role === "recruiter" ? "pending" : "verified");
   const companyName = String(user?.companyName || user?.company || "").trim();
+  const companyPhone = String(user?.companyPhone || "").trim();
   const companyWebsite = String(user?.companyWebsite || "").trim();
   const companyIndustry = String(user?.companyIndustry || "").trim();
   const companySize = String(user?.companySize || "").trim();
@@ -338,6 +339,7 @@ function normalizeStoredUser(user = {}) {
     role,
     verificationStatus,
     companyName,
+    companyPhone,
     companyWebsite,
     companyIndustry,
     companySize,
@@ -351,6 +353,7 @@ function readCompanyDetails(payload = {}, role = "candidate") {
   if (role !== "recruiter") {
     return {
       companyName: "",
+      companyPhone: "",
       companyWebsite: "",
       companyIndustry: "",
       companySize: "",
@@ -360,6 +363,7 @@ function readCompanyDetails(payload = {}, role = "candidate") {
     };
   }
   const companyName = String(payload.companyName || payload.company || "").trim();
+  const companyPhone = String(payload.companyPhone || "").trim();
   const companyWebsite = String(payload.companyWebsite || "").trim();
   const companyIndustry = String(payload.companyIndustry || "").trim();
   const companySize = String(payload.companySize || "").trim();
@@ -367,6 +371,7 @@ function readCompanyDetails(payload = {}, role = "candidate") {
   const companyDescription = String(payload.companyDescription || "").trim();
   return {
     companyName,
+    companyPhone,
     companyWebsite,
     companyIndustry,
     companySize,
@@ -383,6 +388,7 @@ function buildAuthUserResponse(user = {}, email = "") {
     email: normalizedUser.email || email || "",
     role: normalizedUser.role || "candidate",
     companyName: normalizedUser.companyName || "",
+    companyPhone: normalizedUser.companyPhone || "",
     companyWebsite: normalizedUser.companyWebsite || "",
     companyIndustry: normalizedUser.companyIndustry || "",
     companySize: normalizedUser.companySize || "",
@@ -1623,6 +1629,7 @@ app.get("/api/auth/me", authMiddleware, async (req, res) => {
       email: user.email || "",
       role: user.role || "candidate",
       companyName: user.companyName || "",
+      companyPhone: user.companyPhone || "",
       companyWebsite: user.companyWebsite || "",
       companyIndustry: user.companyIndustry || "",
       companySize: user.companySize || "",
