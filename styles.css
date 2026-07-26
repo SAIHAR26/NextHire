@@ -3106,6 +3106,17 @@ body.admin-page .muted {
   gap: 10px;
   margin: 12px 0;
 }
+.opp-file-label {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 7px;
+  color: var(--admin-muted, #8aa0b5);
+  font-size: 0.9rem;
+}
+
+.opp-file-label input[type="file"] {
+  cursor: pointer;
+}
 
 .opportunity-question-list {
   display: grid;
@@ -3132,3 +3143,4 @@ body.admin-page .muted {
     grid-template-columns: 1fr;
   }
 }
+

@@ -1,4 +1,4 @@
-const API_BASE = "http://localhost:4000";
+const API_BASE = window.location.origin.startsWith("http") ? window.location.origin : "http://localhost:4000";
 const TOKEN_KEY = "nexthire_token";
 const ROLE_KEY = "nexthire_role";
 
@@ -397,12 +397,23 @@ async function loadAdminPosts() {
   return data.opportunities || [];
 }
 
+function renderResumeCell(row = {}) {
+  if (row.resumeFileDataUrl) {
+    const fileName = row.resumeFileName || "resume.pdf";
+    return `<a href="${escapeHtml(row.resumeFileDataUrl)}" download="${escapeHtml(fileName)}">${escapeHtml(fileName)}</a>`;
+  }
+  if (row.resumeLink) {
+    return `<a href="${escapeHtml(row.resumeLink)}" target="_blank" rel="noopener noreferrer">Resume link</a>`;
+  }
+  return `<span class="muted">Not added</span>`;
+}
+
 function renderAnalyticsTable(applications = [], submissions = []) {
   const rows = applications.length
     ? applications.map((row) => `
-      <tr><td>${escapeHtml(row.name || "Candidate")}</td><td>${escapeHtml(row.email || "")}</td><td>${escapeHtml(row.phone || "")}</td><td>${escapeHtml(row.college || "")}</td><td>${escapeHtml(row.status || "applied")}</td><td>${escapeHtml(formatDate(row.appliedAt))}</td></tr>
+      <tr><td>${escapeHtml(row.name || "Candidate")}</td><td>${escapeHtml(row.email || "")}</td><td>${escapeHtml(row.phone || "")}</td><td>${escapeHtml(row.college || "")}</td><td>${renderResumeCell(row)}</td><td>${escapeHtml(row.status || "applied")}</td><td>${escapeHtml(formatDate(row.appliedAt))}</td></tr>
     `).join("")
-    : `<tr><td colspan="6" class="empty-cell">No applications yet.</td></tr>`;
+    : `<tr><td colspan="7" class="empty-cell">No applications yet.</td></tr>`;
   const submissionRows = submissions.length
     ? submissions.map((row) => `
       <tr><td>${escapeHtml(row.name || "Candidate")}</td><td>${escapeHtml(row.email || "")}</td><td>${escapeHtml(`${row.score || 0}/${row.total || 0}`)}</td><td>${escapeHtml(`${row.percentage || 0}%`)}</td><td>${escapeHtml(formatDate(row.submittedAt))}</td></tr>
@@ -410,7 +421,7 @@ function renderAnalyticsTable(applications = [], submissions = []) {
     : `<tr><td colspan="5" class="empty-cell">No quiz submissions yet.</td></tr>`;
   analyticsTableEl.innerHTML = `
     <h4>Applicants</h4>
-    <table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>College</th><th>Status</th><th>Applied</th></tr></thead><tbody>${rows}</tbody></table>
+    <table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>College</th><th>Resume</th><th>Status</th><th>Applied</th></tr></thead><tbody>${rows}</tbody></table>
     <h4>Quiz / Contest Submissions</h4>
     <table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Score</th><th>Percent</th><th>Submitted</th></tr></thead><tbody>${submissionRows}</tbody></table>
   `;

@@ -99,7 +99,8 @@ function resetKpis() {
   if (readyEl) readyEl.textContent = "--";
 }
 
-const API_BASE = "http://localhost:4000";
+const API_BASE = window.location.origin.startsWith("http") ? window.location.origin : "http://localhost:4000";
+const MAX_RESUME_PDF_BYTES = 4 * 1024 * 1024;
 const TOKEN_KEY = "nexthire_token";
 const NAME_KEY = "nexthire_name";
 const PROFILE_KEY = "nexthire_profile";
@@ -2811,7 +2812,7 @@ async function fetchAnalysis(payload) {
     if (err.name === "AbortError") {
       throw new Error("Request timed out. Check the backend and try again.");
     }
-    throw new Error("Cannot reach backend. Start the server on http://localhost:4000.");
+    throw new Error(`Cannot reach backend at ${API_BASE}. Start the server and refresh.`);
   } finally {
     clearTimeout(timer);
   }
@@ -3520,7 +3521,10 @@ function opportunityCard(item) {
         <input class="opp-phone" type="text" placeholder="Phone" />
         <input class="opp-college" type="text" placeholder="College" />
         <input class="opp-portfolio" type="url" placeholder="Portfolio / LinkedIn" />
-        <input class="opp-resume" type="url" placeholder="Resume link" />
+        <input class="opp-resume" type="url" placeholder="Resume link (optional)" />
+        <label class="opp-file-label">Resume PDF
+          <input class="opp-resume-file" type="file" accept="application/pdf,.pdf" />
+        </label>
         <textarea class="opp-note" rows="2" placeholder="Short note"></textarea>
       </div>
       <div class="actions">
@@ -3568,7 +3572,29 @@ function closeOpportunitiesModal() {
   opportunitiesModal?.classList.add("hidden");
 }
 
-function collectOpportunityForm(card) {
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read resume PDF."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function collectOpportunityForm(card) {
+  const resumeFile = card.querySelector(".opp-resume-file")?.files?.[0] || null;
+  let resumeUpload = null;
+  if (resumeFile) {
+    const isPdf = resumeFile.type === "application/pdf" || /\.pdf$/i.test(resumeFile.name || "");
+    if (!isPdf) throw new Error("Upload resume as a PDF file.");
+    if (resumeFile.size > MAX_RESUME_PDF_BYTES) throw new Error("Resume PDF must be 4MB or smaller.");
+    resumeUpload = {
+      name: resumeFile.name || "resume.pdf",
+      type: resumeFile.type || "application/pdf",
+      size: resumeFile.size || 0,
+      dataUrl: await readFileAsDataUrl(resumeFile),
+    };
+  }
   return {
     name: card.querySelector(".opp-name")?.value || "",
     email: card.querySelector(".opp-email")?.value || "",
@@ -3576,6 +3602,7 @@ function collectOpportunityForm(card) {
     college: card.querySelector(".opp-college")?.value || "",
     portfolio: card.querySelector(".opp-portfolio")?.value || "",
     resumeLink: card.querySelector(".opp-resume")?.value || "",
+    resumeFile: resumeUpload,
     note: card.querySelector(".opp-note")?.value || "",
   };
 }
@@ -3588,7 +3615,7 @@ async function submitOpportunityApplication(button) {
   try {
     await fetchWithAuth(`/api/opportunities/${encodeURIComponent(id)}/apply`, {
       method: "POST",
-      body: JSON.stringify(collectOpportunityForm(card)),
+      body: JSON.stringify(await collectOpportunityForm(card)),
     });
     setOpportunitiesStatus("Application saved. Admin can view it in analytics.", "ok");
     logActivity("opportunity_applied", { type: card.dataset.type || "job", id });
@@ -4180,7 +4207,7 @@ if (downloadResumeBtn) {
 }
 
 initTheme();
-setStatus("warn", "Connect your backend at http://localhost:4000.");
+setStatus("warn", `Connect your backend at ${API_BASE}.`);
 renderWelcome();
 resetKpis();
 renderPublicProfileControls(state.inputs);

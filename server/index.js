@@ -38,7 +38,7 @@ try {
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "8mb" }));
 
 const PORT = process.env.PORT || 4000;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || "";
@@ -66,6 +66,11 @@ const ADMIN_EMAIL = normalizeEmail(process.env.ADMIN_EMAIL || "admin@nexthire.lo
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "NexHire@Admin123!");
 const ADMIN_NAME = String(process.env.ADMIN_NAME || "NextHire Admin").trim() || "NextHire Admin";
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+app.use(express.static(APP_ROOT));
+app.get("/", (req, res) => {
+  res.sendFile(path.join(APP_ROOT, "index.html"));
+});
 
 let dbClient;
 let dbFailedAt = 0;
@@ -1906,7 +1911,25 @@ async function findOpportunity(db, id) {
   return doc ? serializeOpportunity(doc) : null;
 }
 
+function sanitizeResumeFile(payload = {}) {
+  const file = payload.resumeFile || null;
+  if (!file || typeof file !== "object") return null;
+  const name = String(file.name || "resume.pdf").trim().slice(0, 160) || "resume.pdf";
+  const type = String(file.type || "application/pdf").trim().toLowerCase();
+  const size = Number(file.size || 0) || 0;
+  const dataUrl = String(file.dataUrl || "").trim();
+  const isPdf = type === "application/pdf" || /\.pdf$/i.test(name);
+  if (!isPdf || !dataUrl.startsWith("data:application/pdf;base64,")) {
+    throw new Error("Resume upload must be a PDF file.");
+  }
+  if (size > 4 * 1024 * 1024 || dataUrl.length > 6 * 1024 * 1024) {
+    throw new Error("Resume PDF must be 4MB or smaller.");
+  }
+  return { name, type: "application/pdf", size, dataUrl };
+}
+
 function applicationRow(user = {}, payload = {}) {
+  const resumeFile = sanitizeResumeFile(payload);
   return {
     userId: String(user._id || user.id || ""),
     name: String(payload.name || user.name || "Candidate").trim(),
@@ -1914,6 +1937,10 @@ function applicationRow(user = {}, payload = {}) {
     phone: String(payload.phone || "").trim(),
     college: String(payload.college || "").trim(),
     resumeLink: String(payload.resumeLink || "").trim(),
+    resumeFileName: resumeFile?.name || "",
+    resumeFileType: resumeFile?.type || "",
+    resumeFileSize: resumeFile?.size || 0,
+    resumeFileDataUrl: resumeFile?.dataUrl || "",
     portfolio: String(payload.portfolio || "").trim(),
     note: String(payload.note || payload.coverLetter || "").trim(),
     status: "applied",
@@ -1960,7 +1987,7 @@ function buildAnalyticsExport(opportunity, applications, format) {
     Email: app.email || "",
     Phone: app.phone || "",
     College: app.college || "",
-    Resume: app.resumeLink || "",
+    Resume: app.resumeLink || app.resumeFileName || "",
     Portfolio: app.portfolio || "",
     Note: app.note || "",
     Status: app.status || "applied",

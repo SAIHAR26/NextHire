@@ -1,4 +1,4 @@
-const API_BASE = "http://localhost:4000";
+const API_BASE = window.location.origin.startsWith("http") ? window.location.origin : "http://localhost:4000";
 const TOKEN_KEY = "nexthire_token";
 const NAME_KEY = "nexthire_name";
 const ROLE_KEY = "nexthire_role";
@@ -202,7 +202,7 @@ async function pingBackend() {
     if (!res.ok) throw new Error("Backend not healthy.");
     setAuthStatus("ok", "Backend connected. You can continue.");
   } catch {
-    setAuthStatus("err", "Backend not reachable. Start server on http://localhost:4000.");
+    setAuthStatus("err", `Backend not reachable at ${API_BASE}. Start the server and refresh.`);
   }
 }
 
@@ -275,7 +275,7 @@ if (loginForm) {
         err.name === "AbortError"
           ? "Login timed out. Check backend and try again."
           : err.message === "Failed to fetch"
-            ? "Cannot reach backend. Start server on http://localhost:4000."
+            ? `Cannot reach backend at ${API_BASE}. Start the server and refresh.`
             : err.message;
       setAuthStatus("err", message);
     }
@@ -327,7 +327,7 @@ if (signupForm) {
         err.name === "AbortError"
           ? "Verification request timed out. Try again."
           : err.message === "Failed to fetch"
-            ? "Cannot reach backend. Start server on http://localhost:4000."
+            ? `Cannot reach backend at ${API_BASE}. Start the server and refresh.`
             : err.message;
       setAuthStatus("err", message);
     } finally {
@@ -366,7 +366,7 @@ if (signupForm) {
         err.name === "AbortError"
           ? "Verification timed out. Try again."
           : err.message === "Failed to fetch"
-            ? "Cannot reach backend. Start server on http://localhost:4000."
+            ? `Cannot reach backend at ${API_BASE}. Start the server and refresh.`
             : err.message;
       setAuthStatus("err", message);
     } finally {
@@ -458,7 +458,7 @@ if (signupForm) {
         err.name === "AbortError"
           ? "Signup timed out. Check backend and try again."
           : err.message === "Failed to fetch"
-            ? "Cannot reach backend. Start server on http://localhost:4000."
+            ? `Cannot reach backend at ${API_BASE}. Start the server and refresh.`
             : err.message;
       setAuthStatus("err", message);
     }
