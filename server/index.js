@@ -79,6 +79,9 @@ const memoryAnalyses = [];
 const memoryActivity = [];
 const memoryProfiles = [];
 const memoryEmailVerifications = [];
+const memoryOpportunities = [];
+const memoryOpportunityApplications = [];
+const memoryQuizSubmissions = [];
 const githubCache = new Map();
 let mailTransportPromise = null;
 
@@ -322,6 +325,7 @@ async function checkHttpService(name, url, options = {}) {
 }
 
 function normalizeStoredUser(user = {}) {
+  if (!user) return null;
   const role = String(user?.role || "candidate").toLowerCase();
   const verificationStatus = String(user?.verificationStatus || "").toLowerCase() || (role === "recruiter" ? "pending" : "verified");
   const companyName = String(user?.companyName || user?.company || "").trim();
@@ -504,6 +508,7 @@ async function updateUserVerificationStatus(userId, verificationStatus, reviewed
     };
     if (status === "verified") updates.verifiedAt = new Date();
     if (status === "rejected") updates.rejectedAt = new Date();
+    updates.companyVerificationStatus = status === "verified" ? "verified" : status === "rejected" ? "rejected" : "pending";
     await db.collection("users").updateOne(
       { _id: new ObjectId(String(userId)) },
       { $set: updates }
@@ -514,6 +519,7 @@ async function updateUserVerificationStatus(userId, verificationStatus, reviewed
   const mem = memoryUsers.find((user) => String(user.id || user._id || "") === String(userId || ""));
   if (!mem) return { ok: false };
   mem.verificationStatus = status;
+  mem.companyVerificationStatus = status === "verified" ? "verified" : status === "rejected" ? "rejected" : "pending";
   mem.reviewedBy = reviewedBy || null;
   mem.reviewedAt = new Date();
   if (status === "verified") mem.verifiedAt = new Date();
@@ -536,7 +542,7 @@ async function loadAdminOverview(db) {
   const recruiterUsers = normalizedUsers.filter((user) => user.role === "recruiter");
   const candidateUsers = normalizedUsers.filter((user) => user.role === "candidate");
   const adminUsers = normalizedUsers.filter((user) => user.role === "admin");
-  const pendingRecruiters = recruiterUsers.filter((user) => user.verificationStatus !== "verified");
+  const pendingRecruiters = recruiterUsers.filter((user) => !["verified", "rejected"].includes(user.verificationStatus));
   const verifiedRecruiters = recruiterUsers.filter((user) => user.verificationStatus === "verified");
 
   const profileMap = new Map(
@@ -549,7 +555,16 @@ async function loadAdminOverview(db) {
     email: user.email || "",
     status: user.verificationStatus || "pending",
     createdAt: user.createdAt || null,
-    profile: profileMap.get(String(user._id || user.id || ""))?.profile || {},
+    profile: {
+      companyName: user.companyName || "",
+      companyPhone: user.companyPhone || "",
+      companyWebsite: user.companyWebsite || "",
+      companyIndustry: user.companyIndustry || "",
+      companySize: user.companySize || "",
+      companyLocation: user.companyLocation || "",
+      companyDescription: user.companyDescription || "",
+      ...(profileMap.get(String(user._id || user.id || ""))?.profile || {}),
+    },
   }));
 
   const recentUsers = normalizedUsers.slice(0, 12).map((user) => ({
@@ -1588,6 +1603,9 @@ app.post("/api/auth/login", async (req, res) => {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: "Invalid credentials." });
     const normalizedUser = normalizeStoredUser(user);
+    if (normalizedUser.role === "recruiter" && normalizedUser.verificationStatus !== "verified") {
+      return res.status(403).json({ error: normalizedUser.verificationStatus === "rejected" ? "Recruiter account was rejected by admin." : "Recruiter account is waiting for admin approval." });
+    }
     const token = jwt.sign({ id: user.id, email, role: normalizedUser.role }, JWT_SECRET, {
       expiresIn: "7d",
     });
@@ -1599,6 +1617,9 @@ app.post("/api/auth/login", async (req, res) => {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: "Invalid credentials." });
     const normalizedUser = normalizeStoredUser(user);
+    if (normalizedUser.role === "recruiter" && normalizedUser.verificationStatus !== "verified") {
+      return res.status(403).json({ error: normalizedUser.verificationStatus === "rejected" ? "Recruiter account was rejected by admin." : "Recruiter account is waiting for admin approval." });
+    }
     const token = jwt.sign({ id: user._id.toString(), email, role: normalizedUser.role }, JWT_SECRET, {
       expiresIn: "7d",
     });
@@ -1611,6 +1632,9 @@ app.post("/api/auth/login", async (req, res) => {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: "Invalid credentials." });
     const normalizedUser = normalizeStoredUser(user);
+    if (normalizedUser.role === "recruiter" && normalizedUser.verificationStatus !== "verified") {
+      return res.status(403).json({ error: normalizedUser.verificationStatus === "rejected" ? "Recruiter account was rejected by admin." : "Recruiter account is waiting for admin approval." });
+    }
     const token = jwt.sign({ id: user.id, email, role: normalizedUser.role }, JWT_SECRET, {
       expiresIn: "7d",
     });
@@ -2014,6 +2038,234 @@ function buildAnalyticsExport(opportunity, applications, format) {
   return { body: csv, type: "text/csv", ext: "csv" };
 }
 
+async function requireVerifiedRecruiter(req, res, next) {
+  const db = await getDb();
+  const user = await findUserById(db, req.user?.id);
+  if (!user || String(user.role || "").toLowerCase() !== "recruiter") {
+    return res.status(403).json({ error: "Recruiter access required." });
+  }
+  if (String(user.verificationStatus || "").toLowerCase() !== "verified") {
+    return res.status(403).json({ error: "Admin verification is required before using recruiter tools." });
+  }
+  req.recruiterUser = user;
+  req.recruiterDb = db;
+  return next();
+}
+
+function getUserIdString(user = {}) {
+  return String(user._id || user.id || "");
+}
+
+async function listRecruiterOpportunities(db, recruiterId) {
+  const safeRecruiterId = String(recruiterId || "");
+  if (db) {
+    const docs = await db.collection("opportunities").find({ createdBy: safeRecruiterId, status: { $ne: "archived" } }).sort({ createdAt: -1 }).toArray();
+    const ids = docs.map((doc) => String(doc._id));
+    const appCounts = await db.collection("opportunityApplications").aggregate([
+      { $match: { opportunityId: { $in: ids } } },
+      { $group: { _id: "$opportunityId", count: { $sum: 1 } } },
+    ]).toArray();
+    const submitCounts = await db.collection("quizSubmissions").aggregate([
+      { $match: { opportunityId: { $in: ids } } },
+      { $group: { _id: "$opportunityId", count: { $sum: 1 } } },
+    ]).toArray();
+    const appMap = new Map(appCounts.map((row) => [String(row._id), row.count]));
+    const submitMap = new Map(submitCounts.map((row) => [String(row._id), row.count]));
+    return docs.map((doc) => serializeOpportunity({ ...doc, applicationCount: appMap.get(String(doc._id)) || 0, submissionCount: submitMap.get(String(doc._id)) || 0 }));
+  }
+  return memoryOpportunities
+    .filter((doc) => doc.status !== "archived" && String(doc.createdBy || "") === safeRecruiterId)
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+    .map((doc) => serializeOpportunity({
+      ...doc,
+      applicationCount: memoryOpportunityApplications.filter((row) => row.opportunityId === String(doc.id)).length,
+      submissionCount: memoryQuizSubmissions.filter((row) => row.opportunityId === String(doc.id)).length,
+    }));
+}
+
+async function findRecruiterOpportunity(db, id, recruiterId) {
+  const opportunity = await findOpportunity(db, id);
+  if (!opportunity || String(opportunity.createdBy || "") !== String(recruiterId || "")) return null;
+  return opportunity;
+}
+
+function computeRecruiterStats(opportunities = [], applications = []) {
+  const activeJobs = opportunities.filter((item) => item.type === "job" && item.status !== "closed").length;
+  const closedJobs = opportunities.filter((item) => item.status === "closed").length;
+  const shortlisted = applications.filter((item) => String(item.status || "").toLowerCase() === "shortlisted").length;
+  const interviews = applications.filter((item) => String(item.status || "").toLowerCase() === "interview").length;
+  const hired = applications.filter((item) => String(item.status || "").toLowerCase() === "hired").length;
+  return {
+    activeJobs,
+    totalJobs: opportunities.filter((item) => item.type === "job").length,
+    totalPosts: opportunities.length,
+    closedJobs,
+    applications: applications.length,
+    shortlisted,
+    interviews,
+    hired,
+  };
+}
+
+function recruiterDefaultDetails(user = {}) {
+  const companyName = String(user.companyName || user.company || "NextHire Demo").trim() || "NextHire Demo";
+  const slug = sanitizeSlug(companyName) || "company";
+  return {
+    companyName,
+    companyPhone: "+91 90000 00000",
+    companyWebsite: `https://${slug}.example.com`,
+    companyIndustry: "Technology & Campus Hiring",
+    companySize: "11-50 employees",
+    companyLocation: "Hyderabad, India",
+    companyDescription: `${companyName} uses NextHire to discover placement-ready students, review candidate rankings, and manage campus hiring opportunities.`,
+  };
+}
+
+async function ensureRecruiterCompanyDetails(db, user = {}) {
+  const defaults = recruiterDefaultDetails(user);
+  const updates = {};
+  Object.entries(defaults).forEach(([key, value]) => {
+    if (!String(user[key] || "").trim()) updates[key] = value;
+  });
+  if (!Object.keys(updates).length) return user;
+  updates.companyVerificationStatus = user.companyVerificationStatus || "verified";
+  updates.updatedAt = new Date();
+  if (db && ObjectId.isValid(String(user._id || ""))) {
+    await db.collection("users").updateOne({ _id: new ObjectId(String(user._id)) }, { $set: updates });
+  } else {
+    Object.assign(user, updates);
+  }
+  return { ...user, ...updates };
+}
+function computeRecruiterProfileScore(user = {}) {
+  const fields = ["name", "email", "companyName", "companyPhone", "companyWebsite", "companyIndustry", "companySize", "companyLocation", "companyDescription"];
+  const filled = fields.filter((field) => String(user[field] || "").trim()).length;
+  const completion = Math.round((filled / fields.length) * 100);
+  const verifiedBonus = String(user.verificationStatus || "") === "verified" ? 20 : 0;
+  return { completion, score: Math.min(100, Math.round(completion * 0.8) + verifiedBonus) };
+}
+
+async function listApplicationsForRecruiter(db, opportunities = []) {
+  const ids = opportunities.map((item) => String(item.id));
+  if (!ids.length) return [];
+  if (db) {
+    return db.collection("opportunityApplications").find({ opportunityId: { $in: ids } }).sort({ appliedAt: -1 }).toArray();
+  }
+  return memoryOpportunityApplications
+    .filter((row) => ids.includes(String(row.opportunityId)))
+    .sort((a, b) => new Date(b.appliedAt || 0) - new Date(a.appliedAt || 0));
+}
+
+app.get("/api/recruiter/dashboard", authMiddleware, requireVerifiedRecruiter, async (req, res) => {
+  try {
+    req.recruiterUser = await ensureRecruiterCompanyDetails(req.recruiterDb, req.recruiterUser);
+    const recruiterId = getUserIdString(req.recruiterUser);
+    const opportunities = await listRecruiterOpportunities(req.recruiterDb, recruiterId);
+    const applications = await listApplicationsForRecruiter(req.recruiterDb, opportunities);
+    const profile = computeRecruiterProfileScore(req.recruiterUser);
+    return res.json({
+      ok: true,
+      user: { id: recruiterId, ...buildAuthUserResponse(req.recruiterUser, req.recruiterUser?.email || "") },
+      profile,
+      stats: computeRecruiterStats(opportunities, applications),
+      opportunities,
+      applications,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Recruiter dashboard unavailable." });
+  }
+});
+
+app.post("/api/recruiter/opportunities", authMiddleware, requireVerifiedRecruiter, async (req, res) => {
+  try {
+    const doc = buildOpportunityDoc({ ...(req.body || {}), type: "job", organization: req.body?.organization || req.recruiterUser.companyName || "" }, req.recruiterUser || {});
+    if (req.recruiterDb) {
+      const created = { ...doc, createdAt: new Date() };
+      const result = await req.recruiterDb.collection("opportunities").insertOne(created);
+      return res.status(201).json({ ok: true, opportunity: serializeOpportunity({ ...created, _id: result.insertedId }) });
+    }
+    const created = { ...doc, id: `opp_${Date.now()}_${Math.random().toString(16).slice(2)}`, createdAt: new Date() };
+    memoryOpportunities.push(created);
+    return res.status(201).json({ ok: true, opportunity: serializeOpportunity(created), storage: "memory" });
+  } catch (err) {
+    return res.status(400).json({ error: err.message || "Could not post job." });
+  }
+});
+
+app.put("/api/recruiter/opportunities/:id", authMiddleware, requireVerifiedRecruiter, async (req, res) => {
+  try {
+    const recruiterId = getUserIdString(req.recruiterUser);
+    const existing = await findRecruiterOpportunity(req.recruiterDb, req.params.id, recruiterId);
+    if (!existing) return res.status(404).json({ error: "Recruiter job not found." });
+    const doc = buildOpportunityDoc({ ...existing, ...(req.body || {}), type: "job", organization: req.body?.organization || existing.organization || req.recruiterUser.companyName || "" }, req.recruiterUser || {});
+    if (req.recruiterDb && ObjectId.isValid(String(req.params.id || ""))) {
+      await req.recruiterDb.collection("opportunities").updateOne({ _id: new ObjectId(String(req.params.id)), createdBy: recruiterId }, { $set: doc });
+      const updated = await req.recruiterDb.collection("opportunities").findOne({ _id: new ObjectId(String(req.params.id)) });
+      return res.json({ ok: true, opportunity: serializeOpportunity(updated) });
+    }
+    const idx = memoryOpportunities.findIndex((row) => String(row.id) === String(req.params.id) && String(row.createdBy) === recruiterId);
+    if (idx < 0) return res.status(404).json({ error: "Recruiter job not found." });
+    memoryOpportunities[idx] = { ...memoryOpportunities[idx], ...doc };
+    return res.json({ ok: true, opportunity: serializeOpportunity(memoryOpportunities[idx]), storage: "memory" });
+  } catch (err) {
+    return res.status(400).json({ error: err.message || "Could not update job." });
+  }
+});
+
+app.delete("/api/recruiter/opportunities/:id", authMiddleware, requireVerifiedRecruiter, async (req, res) => {
+  try {
+    const recruiterId = getUserIdString(req.recruiterUser);
+    const existing = await findRecruiterOpportunity(req.recruiterDb, req.params.id, recruiterId);
+    if (!existing) return res.status(404).json({ error: "Recruiter job not found." });
+    if (req.recruiterDb && ObjectId.isValid(String(req.params.id || ""))) {
+      await req.recruiterDb.collection("opportunities").updateOne({ _id: new ObjectId(String(req.params.id)), createdBy: recruiterId }, { $set: { status: "archived", archivedAt: new Date(), updatedAt: new Date() } });
+      return res.json({ ok: true });
+    }
+    const item = memoryOpportunities.find((row) => String(row.id) === String(req.params.id) && String(row.createdBy) === recruiterId);
+    item.status = "archived";
+    item.archivedAt = new Date();
+    item.updatedAt = new Date();
+    return res.json({ ok: true, storage: "memory" });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Could not archive job." });
+  }
+});
+
+app.get("/api/recruiter/applications", authMiddleware, requireVerifiedRecruiter, async (req, res) => {
+  try {
+    const opportunities = await listRecruiterOpportunities(req.recruiterDb, getUserIdString(req.recruiterUser));
+    const applications = await listApplicationsForRecruiter(req.recruiterDb, opportunities);
+    return res.json({ ok: true, applications, opportunities });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Could not load applications." });
+  }
+});
+
+app.patch("/api/recruiter/applications/:id", authMiddleware, requireVerifiedRecruiter, async (req, res) => {
+  try {
+    const status = String(req.body?.status || "").trim().toLowerCase();
+    if (!["applied", "reviewed", "shortlisted", "interview", "rejected", "hired"].includes(status)) {
+      return res.status(400).json({ error: "Choose a valid application status." });
+    }
+    const opportunities = await listRecruiterOpportunities(req.recruiterDb, getUserIdString(req.recruiterUser));
+    const ids = new Set(opportunities.map((item) => String(item.id)));
+    const appId = String(req.params.id || "");
+    if (req.recruiterDb && ObjectId.isValid(appId)) {
+      const existing = await req.recruiterDb.collection("opportunityApplications").findOne({ _id: new ObjectId(appId) });
+      if (!existing || !ids.has(String(existing.opportunityId))) return res.status(404).json({ error: "Application not found." });
+      await req.recruiterDb.collection("opportunityApplications").updateOne({ _id: new ObjectId(appId) }, { $set: { status, updatedAt: new Date() } });
+      const updated = await req.recruiterDb.collection("opportunityApplications").findOne({ _id: new ObjectId(appId) });
+      return res.json({ ok: true, application: updated });
+    }
+    const item = memoryOpportunityApplications.find((row) => String(row.id) === appId && ids.has(String(row.opportunityId)));
+    if (!item) return res.status(404).json({ error: "Application not found." });
+    item.status = status;
+    item.updatedAt = new Date();
+    return res.json({ ok: true, application: item, storage: "memory" });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Could not update application." });
+  }
+});
 app.get("/api/admin/opportunities", authMiddleware, requireAdmin, async (req, res) => {
   try {
     const opportunities = await listOpportunities(req.adminDb, { type: req.query.type });
@@ -2549,7 +2801,7 @@ function buildRankEntry(analysisDoc, userName = "User", visibility = null) {
   return {
     userId: String(analysisDoc?.userId || ""),
     name: String(userName || "User"),
-    isPublic: visibility?.isPublic !== false,
+    isPublic: Boolean(visibility?.isPublic !== false && visibility?.publicSlug),
     publicSlug: String(visibility?.publicSlug || ""),
     publicUrl:
       visibility?.isPublic !== false && visibility?.publicSlug
@@ -2600,15 +2852,19 @@ app.get("/api/rankings", authMiddleware, async (req, res) => {
             },
           ])
           .toArray(),
-        db.collection("users").find({}, { projection: { name: 1 } }).toArray(),
+        db.collection("users").find({ $or: [{ role: "candidate" }, { role: { $exists: false } }, { role: "" }, { role: null }] }, { projection: { name: 1, email: 1, role: 1 } }).toArray(),
         db
           .collection("profiles")
           .find({}, { projection: { userId: 1, isPublic: 1, publicSlug: 1, profile: 1 } })
           .toArray(),
       ]);
 
+      const userIdSet = new Set(users.map((u) => String(u?._id || "")));
       const userNameMap = new Map(
-        users.map((u) => [String(u?._id || ""), String(u?.name || "User")])
+        users.map((u) => [
+          String(u?._id || ""),
+          String(u?.name || "").trim() && String(u?.name || "").trim().toLowerCase() !== "user" ? String(u?.name || "").trim() : String(u?.email || "").split("@")[0] || `Candidate ${String(u?._id || "").slice(-4)}`,
+        ])
       );
       const visibilityMap = new Map(
         profiles.map((p) => [
@@ -2624,11 +2880,12 @@ app.get("/api/rankings", authMiddleware, async (req, res) => {
       );
 
       const rows = latestAnalyses
+        .filter((doc) => userIdSet.has(String(doc?.userId)))
         .map((doc) =>
           buildRankEntry(
             doc,
-            userNameMap.get(String(doc?.userId)) || "User",
-            visibilityMap.get(String(doc?.userId)) || { isPublic: true, publicSlug: "" }
+            userNameMap.get(String(doc?.userId)) || "Candidate",
+            visibilityMap.get(String(doc?.userId)) || { isPublic: false, publicSlug: "" }
           )
         )
         .filter((row) => (query ? row.name.toLowerCase().includes(query) : true))
@@ -2647,7 +2904,9 @@ app.get("/api/rankings", authMiddleware, async (req, res) => {
     }
   }
 
-  const userNameMap = new Map(memoryUsers.map((u) => [String(u?.id || ""), String(u?.name || "User")]));
+  const candidateMemoryUsers = memoryUsers.filter((u) => !["admin", "recruiter"].includes(String(u?.role || "candidate").toLowerCase()));
+  const memoryUserIdSet = new Set(candidateMemoryUsers.map((u) => String(u?.id || u?._id || "")));
+  const userNameMap = new Map(candidateMemoryUsers.map((u) => [String(u?.id || u?._id || ""), String(u?.name || "").trim() && String(u?.name || "").trim().toLowerCase() !== "user" ? String(u?.name || "").trim() : String(u?.email || "").split("@")[0] || `Candidate ${String(u?.id || u?._id || "").slice(-4)}`]));
   const latestByUser = new Map();
   memoryAnalyses.forEach((doc) => {
     const userId = String(doc?.userId || "");
@@ -2661,11 +2920,12 @@ app.get("/api/rankings", authMiddleware, async (req, res) => {
   });
 
   const rows = Array.from(latestByUser.values())
+    .filter((doc) => memoryUserIdSet.has(String(doc?.userId)))
     .map((doc) =>
       buildRankEntry(
         doc,
         userNameMap.get(String(doc?.userId)) || "User",
-        { isPublic: true, publicSlug: "" }
+        { isPublic: false, publicSlug: "" }
       )
     )
     .filter((row) => (query ? row.name.toLowerCase().includes(query) : true))

@@ -420,44 +420,12 @@ if (signupForm) {
         throw new Error(msg.error || "Signup failed.");
       }
       if (payload.role === "recruiter") {
-        setAuthStatus("warn", "Account created. Opening recruiter dashboard...");
-        try {
-          const loginRes = await fetchWithTimeout(`${API_BASE}/api/auth/login`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: payload.email, password: payload.password }),
-          });
-          if (!loginRes.ok) throw new Error("Recruiter auto-login unavailable.");
-          const data = await loginRes.json();
-          if (String(data.role || "").toLowerCase() !== "recruiter") {
-            throw new Error("Recruiter account was not returned by login.");
-          }
-          setToken(data.token);
-          setName((data.name || "").trim() || payload.name || guessNameFromEmail(payload.email));
-          setRole("recruiter");
-          setUserDetails({
-            email: payload.email,
-            companyName: data.companyName || payload.companyName,
-            companyPhone: data.companyPhone || payload.companyPhone,
-            companyWebsite: data.companyWebsite || payload.companyWebsite,
-            companyIndustry: data.companyIndustry || payload.companyIndustry,
-            companySize: data.companySize || payload.companySize,
-            companyLocation: data.companyLocation || payload.companyLocation,
-            companyDescription: data.companyDescription || payload.companyDescription,
-            companyVerificationStatus: data.companyVerificationStatus || "submitted",
-            verificationStatus: data.verificationStatus || "pending",
-          });
-          resetVerificationState();
-          setTimeout(redirectRecruiterDashboard, 400);
-          return;
-        } catch {
-          resetVerificationState();
-          setAuthStatus("ok", "Account created. Redirecting to recruiter login...");
-          setTimeout(() => {
-            window.location.href = getRecruiterLoginUrl(payload.email);
-          }, 600);
-          return;
-        }
+        resetVerificationState();
+        setAuthStatus("ok", "Recruiter account created. Wait for admin approval before logging in.");
+        setTimeout(() => {
+          window.location.href = getRecruiterLoginUrl(payload.email);
+        }, 1200);
+        return;
       }
       setAuthStatus("ok", "Account created. Redirecting to login...");
       resetVerificationState();

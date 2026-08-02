@@ -17,20 +17,22 @@
       </div>
       <nav class="nav">
         <a href="#dashboard">Dashboard</a>
-        <a href="#profile">Profile</a>
-        <a href="#settings">Settings</a>
+        <a href="#company-profile">Company</a>
+        <a href="#post-job">Post Job</a>
+        <a href="#applications">Candidates</a>
+        <a href="#student-rankings">Rankings</a>
       </nav>
     </header>
 
     <main class="recruiter-layout">
       <aside class="recruiter-sidebar" aria-label="Recruiter navigation">
         <a class="active" href="#dashboard">Dashboard</a>
-        <a href="#profile">Profile</a>
         <a href="#company-profile">Company Profile</a>
         <a href="#post-job">Post Job</a>
         <a href="#manage-jobs">Manage Jobs</a>
-        <a href="#applications">Applications</a>
-        <a href="#settings">Settings</a>
+        <a href="#applications">Candidates</a>
+        <a href="#student-rankings">Rankings</a>
+        <button id="recruiter-refresh-btn" type="button" class="ghost">Refresh</button>
         <button id="recruiter-logout-btn" type="button" class="ghost">Logout</button>
       </aside>
 
@@ -39,9 +41,7 @@
           <div class="hero-content">
             <span class="chip live">Recruiter Workspace</span>
             <h2>Welcome, <span id="recruiter-name">Recruiter</span>.</h2>
-            <p class="muted">
-              Track jobs, applications, and shortlisted candidates from your recruiter dashboard.
-            </p>
+            <p class="muted" id="recruiter-summary">Loading recruiter dashboard...</p>
             <div class="hero-actions">
               <a class="primary" href="#post-job">Post Job</a>
               <a class="ghost" href="#applications">Applications</a>
@@ -50,176 +50,146 @@
           <div class="hero-panel">
             <div class="pulse-card">
               <h3>Open Jobs</h3>
-              <p><strong>0</strong> active listings</p>
-              <p>0 drafts</p>
-              <p>0 closed</p>
+              <p><strong id="hero-active-jobs">0</strong> active listings</p>
+              <p><span id="hero-total-jobs">0</span> total jobs</p>
+              <p><span id="hero-closed-jobs">0</span> closed</p>
             </div>
             <div class="pulse-card accent">
               <h3>Applications</h3>
-              <p><strong>0</strong> received</p>
-              <p>0 shortlisted</p>
-              <p>0 interviews</p>
+              <p><strong id="hero-applications">0</strong> received</p>
+              <p><span id="hero-shortlisted">0</span> shortlisted</p>
+              <p><span id="hero-interviews">0</span> interviews</p>
             </div>
           </div>
         </section>
 
+        <div id="recruiter-status" class="status muted">Loading recruiter data...</div>
+
         <section class="card">
           <h2>Dashboard</h2>
           <div class="mini-kpis">
-            <div class="kpi">
-              <span class="label">Recruiter Name</span>
-              <span class="value" id="recruiter-card-name">Recruiter</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Email</span>
-              <span class="value" id="recruiter-email">Not added</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Company Name</span>
-              <span class="value" id="company-name">Not added</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Company Phone</span>
-              <span class="value" id="company-phone">Not added</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Company Website</span>
-              <span class="value" id="company-website">Not added</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Company Verification</span>
-              <span class="value" id="company-verification-status">Pending</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Verification Status</span>
-              <span class="value" id="verification-status">Pending</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Profile Completion</span>
-              <span class="value">0%</span>
-            </div>
-            <div class="kpi">
-              <span class="label">AI Recruiter Score</span>
-              <span class="value">0</span>
-            </div>
+            <div class="kpi"><span class="label">Recruiter Name</span><span class="value" id="recruiter-card-name">Recruiter</span></div>
+            <div class="kpi"><span class="label">Email</span><span class="value" id="recruiter-email">Not added</span></div>
+            <div class="kpi"><span class="label">Company Name</span><span class="value" id="company-name">Not added</span></div>
+            <div class="kpi"><span class="label">Verification</span><span class="value" id="verification-status">Pending</span></div>
+            <div class="kpi"><span class="label">Profile Completion</span><span class="value" id="profile-completion">0%</span></div>
+            <div class="kpi"><span class="label">Profile Quality Score</span><span class="value" id="recruiter-score">0</span></div>
           </div>
         </section>
 
         <section class="card">
           <h2>Statistics</h2>
           <div class="mini-kpis">
-            <div class="kpi">
-              <span class="label">Active Jobs</span>
-              <span class="value">0</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Total Jobs</span>
-              <span class="value">0</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Applications</span>
-              <span class="value">0</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Shortlisted</span>
-              <span class="value">0</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Interviews</span>
-              <span class="value">0</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Hired</span>
-              <span class="value">0</span>
-            </div>
+            <div class="kpi"><span class="label">Active Jobs</span><span class="value" id="stat-active-jobs">0</span></div>
+            <div class="kpi"><span class="label">Total Jobs</span><span class="value" id="stat-total-jobs">0</span></div>
+            <div class="kpi"><span class="label">Applications</span><span class="value" id="stat-applications">0</span></div>
+            <div class="kpi"><span class="label">Shortlisted</span><span class="value" id="stat-shortlisted">0</span></div>
+            <div class="kpi"><span class="label">Interviews</span><span class="value" id="stat-interviews">0</span></div>
+            <div class="kpi"><span class="label">Hired</span><span class="value" id="stat-hired">0</span></div>
           </div>
-        </section>
-
-        <section id="profile" class="card">
-          <h2>Profile</h2>
-          <div class="status warn">Verification Status: Pending</div>
-          <div class="status warn">Profile Completion: 0%</div>
-          <div class="status warn">AI Recruiter Score: 0</div>
         </section>
 
         <section id="company-profile" class="card">
-          <h2>Company Profile</h2>
-          <div class="mini-kpis">
-            <div class="kpi">
-              <span class="label">Company Name</span>
-              <span class="value" id="company-profile-name">Not added</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Phone</span>
-              <span class="value" id="company-profile-phone">Not added</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Industry</span>
-              <span class="value" id="company-industry">Not added</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Company Size</span>
-              <span class="value" id="company-size">Not added</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Location</span>
-              <span class="value" id="company-location">Not added</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Company Details</span>
-              <span class="value" id="company-description">Not added</span>
-            </div>
+          <div class="section-head tight">
+            <h2>Company Profile</h2>
+            <span id="company-db-status" class="pill">MongoDB synced</span>
           </div>
+          <div class="company-detail-grid">
+            <div class="company-detail"><span>Company Name</span><strong id="company-view-name">Not added</strong></div>
+            <div class="company-detail"><span>Company Phone</span><strong id="company-view-phone">Not added</strong></div>
+            <div class="company-detail"><span>Company Website</span><strong id="company-view-website">Not added</strong></div>
+            <div class="company-detail"><span>Industry</span><strong id="company-view-industry">Not added</strong></div>
+            <div class="company-detail"><span>Company Size</span><strong id="company-view-size">Not added</strong></div>
+            <div class="company-detail"><span>Location</span><strong id="company-view-location">Not added</strong></div>
+            <div class="company-detail full"><span>Company Details</span><strong id="company-view-description">Not added</strong></div>
+          </div>
+          <div class="actions company-edit-actions">
+            <button id="company-edit-toggle" class="ghost" type="button">Change Details</button>
+          </div>
+          <form id="company-form" class="recruiter-form hidden">
+            <label>Company Name<input id="company-input-name" type="text" required /></label>
+            <label>Company Phone<input id="company-input-phone" type="tel" /></label>
+            <label>Company Website<input id="company-input-website" type="url" placeholder="https://company.com" /></label>
+            <label>Industry<input id="company-input-industry" type="text" /></label>
+            <label>Company Size<input id="company-input-size" type="text" placeholder="11-50 employees" /></label>
+            <label>Location<input id="company-input-location" type="text" /></label>
+            <label class="full">Company Details<textarea id="company-input-description" rows="3"></textarea></label>
+            <div class="actions full">
+              <button class="primary" type="submit">Save Company Profile</button>
+              <button id="company-edit-cancel" class="ghost" type="button">Cancel</button>
+            </div>
+          </form>
         </section>
 
         <section id="post-job" class="card">
           <h2>Post Job</h2>
-          <div class="status warn">Draft jobs: 0</div>
+          <form id="job-form" class="recruiter-form">
+            <input id="job-id" type="hidden" />
+            <label>Job Title<input id="job-title" type="text" required placeholder="Frontend Developer Intern" /></label>
+            <label>Role<input id="job-role" type="text" placeholder="Software Engineer Intern" /></label>
+            <label>Employment Type<input id="job-employment" type="text" placeholder="Internship / Full time" /></label>
+            <label>Salary / Stipend<input id="job-salary" type="text" /></label>
+            <label>Location<input id="job-location" type="text" placeholder="Remote / Hyderabad" /></label>
+            <label>Mode<select id="job-mode"><option>Online</option><option>Offline</option><option>Hybrid</option></select></label>
+            <label>Deadline<input id="job-deadline" type="datetime-local" /></label>
+            <label>Skills<input id="job-skills" type="text" placeholder="JavaScript, MongoDB, DSA" /></label>
+            <label class="full">Eligibility<textarea id="job-eligibility" rows="2"></textarea></label>
+            <label class="full">Description<textarea id="job-description" rows="4" required></textarea></label>
+            <label class="full">Application Instructions<textarea id="job-instructions" rows="3"></textarea></label>
+            <div class="actions full">
+              <button class="primary" type="submit" id="job-submit-btn">Publish Job</button>
+              <button class="ghost" type="button" id="job-reset-btn">Clear</button>
+            </div>
+          </form>
         </section>
 
         <section id="manage-jobs" class="card">
-          <h2>Manage Jobs</h2>
-          <div class="mini-kpis">
-            <div class="kpi">
-              <span class="label">Open</span>
-              <span class="value">0</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Paused</span>
-              <span class="value">0</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Closed</span>
-              <span class="value">0</span>
-            </div>
+          <div class="section-head tight">
+            <h2>Manage Jobs</h2>
+            <span id="job-count" class="pill">0 jobs</span>
           </div>
+          <div id="recruiter-job-list" class="posted-list"></div>
         </section>
 
         <section id="applications" class="card">
-          <h2>Applications</h2>
-          <div class="mini-kpis">
-            <div class="kpi">
-              <span class="label">New</span>
-              <span class="value">0</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Reviewed</span>
-              <span class="value">0</span>
-            </div>
-            <div class="kpi">
-              <span class="label">Interviews</span>
-              <span class="value">0</span>
-            </div>
+          <div class="section-head tight">
+            <h2>Candidate Applications</h2>
+            <span id="application-count" class="pill">0 applications</span>
           </div>
+          <div id="recruiter-application-list" class="posted-list"></div>
         </section>
-
-        <section id="settings" class="card">
-          <h2>Settings</h2>
-          <div class="status warn">Configured settings: 0</div>
+        <section id="student-rankings" class="card">
+          <div class="section-head tight">
+            <h2>Student Rankings</h2>
+            <span id="recruiter-rankings-count" class="pill">0 students</span>
+          </div>
+          <div class="rankings-toolbar recruiter-rankings-toolbar">
+            <input id="recruiter-rankings-search" type="text" placeholder="Search students by name..." />
+            <button type="button" id="recruiter-rankings-refresh" class="ghost">Refresh</button>
+          </div>
+          <div id="recruiter-rankings-status" class="status muted">Loading student rankings...</div>
+          <div class="rankings-table-wrap recruiter-rankings-wrap">
+            <table class="rankings-table">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Student</th>
+                  <th>Role Fit</th>
+                  <th>Readiness</th>
+                  <th>Rank Score</th>
+                  <th>Programs</th>
+                  <th>Projects</th>
+                  <th>Contests</th>
+                  <th>Profile</th>
+                </tr>
+              </thead>
+              <tbody id="recruiter-rankings-body"></tbody>
+            </table>
+          </div>
         </section>
       </div>
     </main>
 
-    <script src="recruiter-dashboard.js"></script>
+    <script src="recruiter-dashboard.js?v=4"></script>
   </body>
 </html>

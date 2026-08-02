@@ -120,7 +120,10 @@ function profileDetailItems(item) {
   const profile = item.profile || {};
   return [
     ["Company", profile.companyName || profile.currentCompany || "Not submitted"],
-    ["Role", profile.role || profile.title || "Recruiter"],
+    ["Phone", profile.companyPhone || "Not submitted"],
+    ["Website", profile.companyWebsite || "Not submitted"],
+    ["Industry", profile.companyIndustry || "Not submitted"],
+    ["Location", profile.companyLocation || "Not submitted"],
     ["Joined", formatDate(item.createdAt)],
   ];
 }

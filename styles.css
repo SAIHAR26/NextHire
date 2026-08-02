@@ -3144,3 +3144,139 @@ body.admin-page .muted {
   }
 }
 
+
+.recruiter-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.recruiter-form label {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.recruiter-form input,
+.recruiter-form select,
+.recruiter-form textarea,
+.application-actions select {
+  width: 100%;
+  border: 1px solid #27364a;
+  border-radius: 8px;
+  padding: 0.72rem 0.8rem;
+  background: rgba(10, 15, 22, 0.9);
+  color: var(--text);
+  font: inherit;
+}
+
+.recruiter-form textarea {
+  resize: vertical;
+}
+
+.recruiter-form .full,
+.recruiter-form .actions {
+  grid-column: 1 / -1;
+}
+
+.recruiter-form .actions,
+.application-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.recruiter-job-card,
+.recruiter-application-card {
+  background: var(--panel-3);
+  border-color: #223041;
+}
+
+.recruiter-job-card h3,
+.recruiter-application-card h3 {
+  color: var(--text);
+}
+
+.application-actions {
+  margin-top: 0.9rem;
+}
+
+.application-actions .ghost {
+  text-decoration: none;
+}
+
+.application-actions select {
+  max-width: 180px;
+}
+
+@media (max-width: 720px) {
+  .recruiter-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+.company-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.company-detail {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid #223041;
+  border-radius: 8px;
+  background: var(--panel-3);
+}
+
+.company-detail.full {
+  grid-column: 1 / -1;
+}
+
+.company-detail span {
+  color: #9dc8f4;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.company-detail strong {
+  color: var(--text);
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.company-edit-actions {
+  margin: 0.5rem 0 1rem;
+}
+
+.recruiter-rankings-toolbar {
+  margin-bottom: 0.8rem;
+}
+
+.recruiter-rankings-wrap {
+  margin-top: 0.8rem;
+}
+
+.recruiter-rankings-wrap .ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.7rem;
+  text-decoration: none;
+}
+
+@media (max-width: 720px) {
+  .company-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.recruiter-form.hidden {
+  display: none;
+}
