@@ -325,49 +325,51 @@ function buildModel() {
   }
 
   const surveyFile = path.join(dataDir, "survey_results_public.csv");
-  const surveyStats = fs.statSync(surveyFile);
-  const surveyText =
-    surveyStats.size > 20 * 1024 * 1024
-      ? readFile("survey_results_public.csv", 5 * 1024 * 1024)
-      : readFile("survey_results_public.csv");
-  const surveyCsv = parseCsv(surveyText).slice(0, MAX_SURVEY_ROWS + 1);
-  const surveyHeader = surveyCsv[0] || [];
-  const devTypeIdx = surveyHeader.indexOf("DevType");
-  const langIdx = surveyHeader.indexOf("LanguageHaveWorkedWith");
-  const webIdx = surveyHeader.indexOf("WebframeHaveWorkedWith");
+  if (fs.existsSync(surveyFile)) {
+    const surveyStats = fs.statSync(surveyFile);
+    const surveyText =
+      surveyStats.size > 20 * 1024 * 1024
+        ? readFile("survey_results_public.csv", 5 * 1024 * 1024)
+        : readFile("survey_results_public.csv");
+    const surveyCsv = parseCsv(surveyText).slice(0, MAX_SURVEY_ROWS + 1);
+    const surveyHeader = surveyCsv[0] || [];
+    const devTypeIdx = surveyHeader.indexOf("DevType");
+    const langIdx = surveyHeader.indexOf("LanguageHaveWorkedWith");
+    const webIdx = surveyHeader.indexOf("WebframeHaveWorkedWith");
 
-  const mapDevType = (value) => {
-    const text = (value || "").toLowerCase();
-    const roles = [];
-    if (text.includes("developer, front-end")) roles.push("Frontend");
-    if (text.includes("developer, back-end")) roles.push("Backend");
-    if (text.includes("developer, full-stack")) roles.push("Fullstack");
-    return roles;
-  };
+    const mapDevType = (value) => {
+      const text = (value || "").toLowerCase();
+      const roles = [];
+      if (text.includes("developer, front-end")) roles.push("Frontend");
+      if (text.includes("developer, back-end")) roles.push("Backend");
+      if (text.includes("developer, full-stack")) roles.push("Fullstack");
+      return roles;
+    };
 
-  surveyCsv.slice(1).forEach((row) => {
-    const devType = row[devTypeIdx] || "";
-    const roles = mapDevType(devType);
-    if (!roles.length) return;
-    const langs = (row[langIdx] || "").split(";").map((s) => s.trim());
-    const webs = (row[webIdx] || "").split(";").map((s) => s.trim());
-    const tokens = tokenize(`${langs.join(" ")} ${webs.join(" ")}`);
-    const weight = DATASET_WEIGHTS.survey;
-    roles.forEach((label) => {
-      classCounts.set(label, classCounts.get(label) + weight);
-      tokens.forEach((token) => {
-        vocab.add(token);
-        const bucket = tokenCounts.get(label);
-        bucket.set(token, (bucket.get(token) || 0) + weight);
-        totalTokens.set(label, totalTokens.get(label) + weight);
-      });
-      const skills = [...langs, ...webs].filter(Boolean);
-      skills.forEach((skill) => {
-        const map = skillBuckets.get(label);
-        map.set(skill, (map.get(skill) || 0) + weight);
+    surveyCsv.slice(1).forEach((row) => {
+      const devType = row[devTypeIdx] || "";
+      const roles = mapDevType(devType);
+      if (!roles.length) return;
+      const langs = (row[langIdx] || "").split(";").map((s) => s.trim());
+      const webs = (row[webIdx] || "").split(";").map((s) => s.trim());
+      const tokens = tokenize(`${langs.join(" ")} ${webs.join(" ")}`);
+      const weight = DATASET_WEIGHTS.survey;
+      roles.forEach((label) => {
+        classCounts.set(label, classCounts.get(label) + weight);
+        tokens.forEach((token) => {
+          vocab.add(token);
+          const bucket = tokenCounts.get(label);
+          bucket.set(token, (bucket.get(token) || 0) + weight);
+          totalTokens.set(label, totalTokens.get(label) + weight);
+        });
+        const skills = [...langs, ...webs].filter(Boolean);
+        skills.forEach((skill) => {
+          const map = skillBuckets.get(label);
+          map.set(skill, (map.get(skill) || 0) + weight);
+        });
       });
     });
-  });
+  }
 
   const vocabSize = vocab.size || 1;
   const totalDocs = ROLE_LABELS.reduce(
