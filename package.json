@@ -1,0 +1,15 @@
+{
+  "name": "nexthire",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "server"
+  ],
+  "scripts": {
+    "start": "npm --workspace nexthire-backend start",
+    "dev": "npm --workspace nexthire-backend run dev"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
