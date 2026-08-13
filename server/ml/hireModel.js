@@ -431,13 +431,21 @@ export function retrainHireModel() {
 
 export function estimateHireProbability(profile) {
   const bins = getHireBins();
-  const leetTotal = Math.min(100, (profile.leetcode.total / 600) * 100);
-  const leetRating = Math.min(100, (profile.leetcode.rating / 2000) * 100);
-  const ccSolved = Math.min(100, (profile.codechef.solved / 800) * 100);
-  const ghRepos = Math.min(100, (profile.github.repos / 10) * 100);
+  const metric = (value) => {
+    const num = Number(value);
+    return Number.isFinite(num) && num > 0 ? num : 0;
+  };
+  const leetcode = profile?.leetcode || {};
+  const codechef = profile?.codechef || {};
+  const github = profile?.github || {};
+  const hackerrank = profile?.hackerrank || {};
+  const leetTotal = Math.min(100, (metric(leetcode.total) / 600) * 100);
+  const leetRating = Math.min(100, (metric(leetcode.rating) / 2000) * 100);
+  const ccSolved = Math.min(100, (metric(codechef.solved) / 800) * 100);
+  const ghRepos = Math.min(100, (metric(github.repos) / 10) * 100);
   const hr = Math.min(
     100,
-    ((profile.hackerrank.badges + profile.hackerrank.certs) / 20) * 100
+    ((metric(hackerrank.badges) + metric(hackerrank.certs)) / 20) * 100
   );
 
   const score =
