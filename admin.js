@@ -524,6 +524,17 @@ async function loadOverview() {
   }
 }
 
+function setCreatePanelOpen(open = true) {
+  createOptionsEl?.classList.toggle("hidden", !open);
+  addToggleBtn?.setAttribute("aria-expanded", open ? "true" : "false");
+  if (addToggleBtn) addToggleBtn.textContent = open ? "x" : "+";
+}
+
+function prepareNextJobPost() {
+  resetPostForm();
+  showPostForm("job");
+  setCreatePanelOpen(true);
+}
 function logout() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(ROLE_KEY);
@@ -531,10 +542,8 @@ function logout() {
 }
 
 addToggleBtn?.addEventListener("click", () => {
-  createOptionsEl?.classList.toggle("hidden");
-  const isOpen = !createOptionsEl?.classList.contains("hidden");
-  addToggleBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
-  addToggleBtn.textContent = isOpen ? "x" : "+";
+  const isOpen = createOptionsEl?.classList.contains("hidden");
+  setCreatePanelOpen(isOpen);
   if (isOpen) {
     createOptionsEl.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -569,9 +578,9 @@ postForm?.addEventListener("submit", async (event) => {
       method: "POST",
       body: JSON.stringify(buildPostPayload()),
     });
-    resetPostForm();
     await loadOverview();
-    setStatus("Post published and visible to candidates.", "ok");
+    prepareNextJobPost();
+    setStatus("Post published. Add another job when ready.", "ok");
   } catch (err) {
     setStatus(err.message || "Could not publish post.", "err");
   }

@@ -63,7 +63,7 @@ const ANALYZE_PLATFORM_DEADLINE_MS = 7000;
 const EMAIL_VERIFICATION_DEV_FALLBACK =
   String(process.env.EMAIL_VERIFICATION_DEV_FALLBACK || "").trim() === "1";
 const ADMIN_EMAIL = normalizeEmail(process.env.ADMIN_EMAIL || "admin@nexthire.local");
-const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "NexHire@Admin123!");
+const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || "NextHire@Admin123!");
 const ADMIN_NAME = String(process.env.ADMIN_NAME || "NextHire Admin").trim() || "NextHire Admin";
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -537,6 +537,13 @@ async function loadAdminOverview(db) {
   const analyses = db
     ? await db.collection("analyses").countDocuments()
     : memoryAnalyses.length;
+  const opportunityDocs = db
+    ? await db.collection("opportunities").find({ status: { $ne: "archived" } }, { projection: { type: 1 } }).toArray()
+    : memoryOpportunities.filter((item) => item.status !== "archived");
+  const postedJobs = opportunityDocs.filter((item) => normalizeOpportunityType(item.type) === "job").length;
+  const postedEvents = opportunityDocs.filter((item) => normalizeOpportunityType(item.type) === "event").length;
+  const postedQuizzes = opportunityDocs.filter((item) => normalizeOpportunityType(item.type) === "quiz").length;
+  const postedOpportunities = opportunityDocs.length;
 
   const normalizedUsers = users.map((user) => normalizeStoredUser(user));
   const recruiterUsers = normalizedUsers.filter((user) => user.role === "recruiter");
@@ -604,6 +611,10 @@ async function loadAdminOverview(db) {
       analyses,
       pages: pages.length,
       jobRecords: jobFiles,
+      postedJobs,
+      postedEvents,
+      postedQuizzes,
+      postedOpportunities,
     },
     recruiterQueue,
     recentUsers,
