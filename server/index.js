@@ -25,16 +25,12 @@ dotenv.config({ path: new URL(".env", import.meta.url) });
 );
 axios.defaults.proxy = false;
 
-// Warm up ML models at startup to avoid first-request timeouts.
-try {
-  retrainRoleModel();
-  retrainHireModel();
-  retrainProjectModel();
-  retrainWeeklyPlanModel();
-  getRoleSkills("Frontend");
-} catch {
-  // ignore warmup errors; model will lazily rebuild on demand
-}
+// Keep hosted startup light. Render expects the service to bind PORT quickly,
+// and eager training can exceed small-instance memory before app.listen runs.
+const ML_WARMUP_ON_START =
+  String(process.env.ML_WARMUP_ON_START || "").trim() === "1";
+const STARTED_AT = new Date().toISOString();
+const RENDER_SERVICE = String(process.env.RENDER_SERVICE_NAME || "").trim();
 
 const app = express();
 app.use(cors());
@@ -3526,7 +3522,7 @@ app.post("/api/analyze", authMiddleware, async (req, res) => {
       targetSkills: weeklyPlan.targetSkills,
       plan: weeklyPlan.plan,
       weeklyPlan,
-      weeklyTraining: retrainWeeklyPlanModel(),
+      weeklyTraining: { status: "cached" },
       projects: recommendProjects({
         role: topRole,
         jobSkills: Array.isArray(jobSkills) ? jobSkills : [],
@@ -3801,12 +3797,35 @@ app.post("/api/chatbot", authMiddleware, async (req, res) => {
   });
 });
 
-try {
-  await seedAdminAccount();
-} catch {
+const server = app.listen(PORT, () => {
+  console.log(`NextHire backend running on http://localhost:${PORT}`);
+  console.log(
+    `NextHire boot ${STARTED_AT}; pid=${process.pid}; node=${process.version}; warmup=${
+      ML_WARMUP_ON_START ? "on" : "off"
+    }; render=${RENDER_SERVICE || "no"}`
+  );
+});
+
+seedAdminAccount().catch(() => {
   // ignore seed errors; admin can still be created later if MongoDB becomes available
+});
+
+if (ML_WARMUP_ON_START) {
+  setImmediate(() => {
+    try {
+      retrainRoleModel();
+      retrainHireModel();
+      retrainProjectModel();
+      retrainWeeklyPlanModel();
+      getRoleSkills("Frontend");
+      console.log("NextHire ML warmup completed.");
+    } catch {
+      // ignore warmup errors; model will lazily rebuild on demand
+    }
+  });
 }
 
-app.listen(PORT, () => {
-  console.log(`NextHire backend running on http://localhost:${PORT}`);
+server.on("error", (err) => {
+  console.error("NextHire backend failed to start:", err);
+  process.exitCode = 1;
 });
