@@ -11,7 +11,7 @@ const COMPANY_LOCATION_KEY = "nexthire_company_location";
 const COMPANY_DESCRIPTION_KEY = "nexthire_company_description";
 const COMPANY_VERIFICATION_STATUS_KEY = "nexthire_company_verification_status";
 const VERIFICATION_STATUS_KEY = "nexthire_verification_status";
-const API_BASE = window.location.origin.startsWith("http") ? window.location.origin : "http://localhost:4000";
+const API_BASE = window.NextHireApiConfig?.apiBaseUrl || "https://nexthire-9nyk.onrender.com";
 const RECRUITER_LOGIN_URL = "login.html?role=recruiter&redirect=recruiter-dashboard.html";
 
 let dashboardState = { user: {}, profile: {}, stats: {}, opportunities: [], applications: [] };

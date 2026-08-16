@@ -99,7 +99,7 @@ function resetKpis() {
   if (readyEl) readyEl.textContent = "--";
 }
 
-const API_BASE = window.location.origin.startsWith("http") ? window.location.origin : "http://localhost:4000";
+const API_BASE = window.NextHireApiConfig?.apiBaseUrl || "https://nexthire-9nyk.onrender.com";
 const MAX_RESUME_PDF_BYTES = 4 * 1024 * 1024;
 const TOKEN_KEY = "nexthire_token";
 const NAME_KEY = "nexthire_name";

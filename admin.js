@@ -1,4 +1,4 @@
-const API_BASE = window.location.origin.startsWith("http") ? window.location.origin : "http://localhost:4000";
+const API_BASE = window.NextHireApiConfig?.apiBaseUrl || "https://nexthire-9nyk.onrender.com";
 const TOKEN_KEY = "nexthire_token";
 const ROLE_KEY = "nexthire_role";
 

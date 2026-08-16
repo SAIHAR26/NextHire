@@ -31,9 +31,31 @@ const ML_WARMUP_ON_START =
   String(process.env.ML_WARMUP_ON_START || "").trim() === "1";
 const STARTED_AT = new Date().toISOString();
 const RENDER_SERVICE = String(process.env.RENDER_SERVICE_NAME || "").trim();
+const FRONTEND_ORIGINS = String(process.env.FRONTEND_ORIGINS || "")
+  .split(",")
+  .map((origin) => origin.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
+const LOCAL_FRONTEND_ORIGINS = [
+  "http://localhost:4000",
+  "http://127.0.0.1:4000",
+  "http://localhost:5500",
+  "http://127.0.0.1:5500",
+  "http://localhost:8080",
+  "http://127.0.0.1:8080",
+];
+const allowedCorsOrigins = new Set([...LOCAL_FRONTEND_ORIGINS, ...FRONTEND_ORIGINS]);
 
 const app = express();
-app.use(cors());
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+      const normalizedOrigin = String(origin).replace(/\/+$/, "");
+      if (allowedCorsOrigins.has(normalizedOrigin)) return callback(null, true);
+      return callback(new Error("Not allowed by CORS"));
+    },
+  })
+);
 app.use(express.json({ limit: "8mb" }));
 
 const PORT = process.env.PORT || 4000;

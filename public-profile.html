@@ -37,11 +37,12 @@
         <div id="public-metrics" class="public-grid"></div>
       </section>
     </main>
+    <script src="api-config.js"></script>
     <script>
       const statusEl = document.getElementById("public-status");
       const nameEl = document.getElementById("public-name");
       const metricsEl = document.getElementById("public-metrics");
-      const API_BASE = "http://localhost:4000";
+      const API_BASE = window.NextHireApiConfig?.apiBaseUrl || "https://nexthire-9nyk.onrender.com";
       const slug = new URLSearchParams(window.location.search).get("u") || "";
 
       function row(label, value) {
